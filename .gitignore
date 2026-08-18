@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Release artifacts built by scripts/pack.sh
+dist/
+
+# Installer backups, in case someone runs the installer inside the clone
+*.bak.*

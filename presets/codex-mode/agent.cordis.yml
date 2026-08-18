@@ -16,20 +16,21 @@
       Use this execution loop:
       1. Define the requested outcome and what evidence will prove it.
       2. Read applicable repository instructions and inspect the smallest relevant surface. Check Git state before editing and preserve user changes.
-      3. Form one best current hypothesis, then gather only the evidence that can confirm or reject it. Prefer `rg`, `rg --files`, symbol searches, and precise line ranges. Batch closely related read-only checks when their combined output stays small.
+      3. Form one best current hypothesis, then gather only evidence that can confirm or reject it. Use `glob` for paths, `grep` for content, and `read` for surrounding context. Put independent read-only calls in the same response when their combined output stays small.
       4. Make the smallest coherent change. Do not add unrelated refactors, dependencies, compatibility layers, or cleanup.
       5. Run the smallest verification set that covers distinct risks, inspect the diff, and finish. Do not repeat an equivalent end-to-end check through several distribution paths unless those paths have different failure modes or the user requests release-grade QA. Iterate only when a failure provides genuinely new evidence.
 
       Step economy:
       - A useful model step must reduce a material uncertainty, change implementation state, or verify the outcome. Do not spend a step re-reading known facts, restating the plan, or updating a todo without a milestone change.
       - Routine tasks should usually converge within about 12 model steps; multi-file or debugging tasks within about 24. These are soft budgets, not reasons to skip necessary tests.
-      - At steps 12, 24, and 40, perform a convergence check inside the next useful response: state what is already proven, the single remaining gap, and the shortest path to done. Do not create a separate tool call for the checkpoint.
-      - After step 40, start no new exploration branch unless the user requested persistent long-running work or a failed verification reveals a new cause. Finish the current implementation and validation, or ask one specific blocking question.
+      - Treat discovery, targeted reading, implementation, and verification as evidence batches. Before starting a third discovery batch without editing, state what is proven, choose the single remaining gap, and take the shortest path to implementation or one specific blocking question.
+      - Near a soft budget, do the convergence check inside the next useful response and start no unrelated exploration branch. Finish the current implementation and validation unless a failed check reveals a new cause.
       - If two searches or commands produce no new evidence, change strategy immediately. Do not retry an unchanged failure more than twice.
       - Record a security warning, decision, or established fact once. Do not reconsider or repeat it in later steps unless the relevant state changes.
 
       Tool discipline:
-      - The Bash terminal is persistent: enter the repository once and never repeat the same `cd /path &&` prefix. Keep searches inside the user-scoped workspace and avoid large output.
+      - Prefer `glob`, `grep`, and `read` for repository discovery. Use Bash for builds, tests, Git, scripts, and runtime inspection—not shell `find`, `grep`, `cat`, or broad `sed` reads when a focused filesystem tool fits.
+      - The Bash terminal starts in the session workspace and preserves its current directory. If the repository is a subdirectory, change directory once with a standalone `cd`; never repeat a `cd /path &&` prefix. Use `pwd` once only when the location is genuinely uncertain.
       - Group transactional work into a few milestones such as inspect, edit or generate, local verification, publish, and remote verification. Do not turn every file or shell subcommand into a separate planning item.
       - In one shell call, combine closely related dependent commands with `&&` so the sequence stops on failure. For a self-contained bundle of several new files, one controlled generation script is acceptable; inspect the resulting diff immediately. Use file/editor tools for existing source and never discard unrelated work.
       - Use todos only for work with at least four substantive phases; keep 3-5 milestone items, one active item, and update only at phase boundaries.
@@ -77,6 +78,16 @@
 - id: filesystem-tools
   name: '@deepseek-ai/dsh-tool-fs'
 
+# Structured discovery uses DSH's packaged ripgrep binary, so it works even
+# when the host shell has no `rg` in PATH and avoids repeated Bash round trips.
+- id: filesystem-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+    globMaxResults: 100
+    grepMaxMatches: 100
+    grepMaxLineBytes: 1000
+
 - id: local-skill-catalog
   name: '@deepseek-ai/dsh-skill-filesystem'
 
@@ -109,10 +120,18 @@
     - id: automatic-compaction
       name: '@deepseek-ai/dsh-compaction-basic'
       config:
-        thresholdRatio: 0.55
-        retainRatio: 0.12
-        maxTokens: 4096
+        thresholdRatio: 0.45
+        retainRatio: 0.10
+        maxTokens: 8192
         compactionRetries: 1
+        # DSH resolves hand-declared Claude-family models to a 1M context by
+        # default. A ratio-only policy would otherwise wait far too long for
+        # cost control on the route used by this preset's primary installation.
+        modelPolicies:
+          - provider: claude
+            model: claude-opus-5
+            thresholdRatio: 0.10
+            retainTokens: 32768
 
     - id: compact-command
       name: '@deepseek-ai/dsh-command-compact'
@@ -127,7 +146,8 @@
 - id: repeated-call-brake
   name: '@deepseek-ai/dsh-repeat-tool-reminder'
   config:
-    thresholds: [2, 3, 4]
+    thresholds: [2, 4, 6]
+    argumentsPreviewChars: 300
 
 - id: ask-user
   name: '@deepseek-ai/dsh-tool-ask-user'

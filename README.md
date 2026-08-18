@@ -74,12 +74,13 @@ rm -rf ~/.dsh/.agent-presets/codex-mode
 - **文件工具** — `read` / `write` / `edit` / `read_image`
 - **skill 目录 + 加载器** — 本地 skill 发现
 - **plan mode** — 只读调研，通过专用工具退出
-- **上下文管理** — 自动压缩（阈值调低到 0.55）、`/compact` 命令、工具结果裁剪（4096 字符起裁）
-- **重复调用刹车** — 同一个工具重复调用时在第 2、3、4 次提醒
+- **结构化搜索** — `glob` / `grep` 使用 DSH 随包提供的 ripgrep，不依赖宿主机 PATH
+- **上下文管理** — 通用阈值 0.45；`claude/claude-opus-5` 在约 10 万 token 时提前压缩并保留最近 32768 token；另带 `/compact` 命令和工具结果裁剪
+- **重复调用刹车** — 同一个工具和参数连续重复时在第 2、4、6 次提醒
 - **todo / ask-user** — 任务计划、必要时提问
 - **web 搜索** — 联网检索（不含 fetch）
 
-工具集是刻意精简的：没有独立的 glob/grep 工具，代码检索交给终端里的 `rg`；也没有长期目标工具。压缩阈值比默认更早触发，用来压住长会话的成本。
+工具集是刻意精简的：保留文件读写与结构化 `glob` / `grep`，不再重复挂载另一套编辑器，也没有长期目标工具。搜索工具使用 DSH 自带的 ripgrep 二进制；Bash 只负责构建、测试、Git、脚本和运行时检查。压缩阈值比默认更早触发，用来压住长会话的重复输入成本。
 
 模型是会话自己的设置，预设不锁定模型。
 
@@ -87,7 +88,11 @@ rm -rf ~/.dsh/.agent-presets/codex-mode
 
 在 `@deepseek-ai/dsh` `0.1.0-rc.6` / Node v24 上验证过。预设格式（`agent.cordis.yml` + `preset.yml`，目录名作 id）是 DSH 的公开约定，插件行也都是公开包，所以后续版本应该继续可用。如果某个插件行改名了，DSH 会把这个预设标成 broken 并在界面上给出原因。
 
-建议装一下 [ripgrep](https://github.com/BurntSushi/ripgrep)（`brew install ripgrep` / `apt install ripgrep` / `winget install BurntSushi.ripgrep.MSVC`）。这个预设没有挂独立的搜索工具，persona 让模型用终端里的 `rg` 做代码检索；`rg` 不在 PATH 上时模型会退回 `grep`，能用但慢一些，也不会自动跳过 `.gitignore` 里的文件。
+不需要额外安装 ripgrep。`@deepseek-ai/dsh-tool-fs-search` 自带支持 macOS、Linux 和 Windows 的 ripgrep 二进制，并通过结构化 `glob` / `grep` 工具调用它；即使终端里的 `rg` 不在 PATH，代码检索也能正常工作。
+
+当前安装为 provider id `claude`、model id `claude-opus-5` 配置了专用压缩策略。如果你的提供方或模型 id 不同，会使用通用策略；可以在 `modelPolicies` 中按实际的 provider/model 增加精确覆盖。
+
+模型与推理档位仍由会话选择器控制。Claude 官方说明较高 effort 会产生更多思考、解释和工具调用，因此普通编辑、打包和发布任务建议从 **High** 开始；只有复杂架构判断或困难调试再选 **Max**，并在同一会话内保持档位稳定以利于缓存。
 
 ## 改成你自己的
 
@@ -95,7 +100,7 @@ rm -rf ~/.dsh/.agent-presets/codex-mode
 
 ---
 
-**English:** A custom agent preset for DeepSeek Harness — a quality-first, cost-aware repository engineering mode: explicit authorization rules, a five-step execution loop, step budgets, batched evidence gathering, minimal diffs, and a verification loop. The toolset is deliberately lean (no separate glob/grep rows; code search goes through `rg` in the persistent shell) and context compaction triggers earlier than the default. Run `./install.sh` (or `install.ps1` on Windows) to copy it into `$DSH_HOME/.agent-presets/`, then pick "Codex 模式" in the session mode picker. No dependencies, no credentials.
+**English:** A custom agent preset for DeepSeek Harness — a quality-first, cost-aware repository engineering mode with explicit authorization rules, batched evidence gathering, minimal diffs, and a verification loop. Structured `glob` / `grep` uses DSH's packaged ripgrep binary, so no host `rg` install is required. The preset also applies an earlier exact-route compaction policy for `claude/claude-opus-5`. Run `./install.sh` (or `install.ps1` on Windows) to copy it into `$DSH_HOME/.agent-presets/`, then pick "Codex 模式" in the session mode picker. No extra dependencies, no credentials.
 
 ## License
 

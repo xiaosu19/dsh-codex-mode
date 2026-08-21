@@ -30,7 +30,8 @@ Codex PTC 模式保留这些工程策略，并按任务形态选择工具面。�
 
 ```bash
 DSH_ROOT="${DSH_HOME:-$HOME/.dsh}"
-find "$DSH_ROOT/.agent-presets" -maxdepth 1 -type d -name 'codex-*' -print
+find "$DSH_ROOT/.agent-presets" -maxdepth 1 -type d \
+  \( -name 'codex-mode' -o -name 'codex-ptc-mode' \) -print
 ```
 
 正常情况下会看到：
@@ -39,6 +40,8 @@ find "$DSH_ROOT/.agent-presets" -maxdepth 1 -type d -name 'codex-*' -print
 .../.agent-presets/codex-mode
 .../.agent-presets/codex-ptc-mode
 ```
+
+安装器覆盖更新时生成的 `*.bak.<时间戳>` 目录只是可恢复备份，名称不符合 DSH 的 preset id 规则，不会成为新的模式。
 
 ### 为什么 `dsh plugin` 查不到模式
 

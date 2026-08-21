@@ -122,6 +122,10 @@ const humanMessage = (text, content = [{ type: 'text', text }]) => ({
 
 test('hybrid preset metadata, adaptive presentation, and compact surface are exact', () => {
   const composition = readFileSync(compositionPath, 'utf8')
+  const codexComposition = readFileSync(
+    join(repository, 'presets', 'codex-mode', 'agent.cordis.yml'),
+    'utf8',
+  )
   const metadata = readFileSync(join(presetRoot, 'preset.yml'), 'utf8')
 
   assert.match(metadata, /^name: Codex PTC 模式$/m)
@@ -134,8 +138,8 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-agent-tool-presentation/)
 
   for (const [key, value] of [
-    ['thresholdRatio', '0.16'],
-    ['retainRatio', '0.04'],
+    ['thresholdRatio', '0.72'],
+    ['retainRatio', '0.18'],
     ['maxTokens', '8192'],
     ['compactionRetries', '1'],
     ['thresholdChars', '4096'],
@@ -144,6 +148,36 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
   ]) {
     assert.match(composition, new RegExp(`^\\s*${key}: ${value}$`, 'm'))
   }
+
+  const millionTokenTargets = [
+    ['gpt', 'gpt-5.6-sol'],
+    ['gpt', 'gpt-5.6-terra'],
+    ['gpt', 'gpt-5.6-luna'],
+    ['claude', 'claude-opus-5'],
+    ['claude', 'claude-opus-4-8'],
+    ['claude', 'claude-opus-4-7'],
+    ['claude', 'claude-opus-4-6'],
+    ['claude', 'claude-sonnet-5'],
+    ['claude', 'claude-sonnet-4-6'],
+    ['claude', 'claude-sonnet-4'],
+    ['claude', 'claude-sonnet-4-20250514'],
+    ['deepseek-official', 'deepseek-v4-pro'],
+    ['deepseek-official', 'deepseek-v4-flash'],
+    ['deepseek-modlens', 'deepseek-v4-pro'],
+    ['deepseek-modlens', 'deepseek-v4-flash'],
+  ]
+  for (const [provider, model] of millionTokenTargets) {
+    assert.match(
+      composition,
+      new RegExp(
+        `provider: ${provider}, model: ${model}, thresholdRatio: 0\\.16, retainTokens: 40000`,
+      ),
+    )
+  }
+
+  const compactionBlock = (source) =>
+    source.match(/    - id: automatic-compaction\n[\s\S]*?\n    - id: compact-command/)?.[0]
+  assert.equal(compactionBlock(composition), compactionBlock(codexComposition))
 
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-tool-goal/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-tool-subagent/)

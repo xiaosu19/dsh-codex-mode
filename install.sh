@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Install the Codex 模式 agent preset into this machine's DSH preset root.
+# Install one DSH Codex preset into this machine's user preset root.
 #
-# The preset root is "$DSH_HOME/.agent-presets" and falls back to
-# "$HOME/.dsh/.agent-presets", matching how DSH itself resolves its home.
-# Nothing is overwritten without --force, and --force keeps a timestamped
-# backup instead of deleting the previous install.
+# The default remains codex-mode. Select the hybrid explicitly with
+# --preset codex-ptc-mode. Nothing is overwritten without --force, and --force
+# keeps a timestamped recoverable backup instead of deleting the prior install.
 
 set -euo pipefail
 
@@ -13,8 +12,9 @@ FORCE=0
 
 usage() {
   cat <<'EOF'
-用法: ./install.sh [--force] [--dest <预设根目录>]
+用法: ./install.sh [--preset <codex-mode|codex-ptc-mode>] [--force] [--dest <预设根目录>]
 
+  --preset <id>    要安装的预设；默认 codex-mode，混合模式用 codex-ptc-mode
   --force          覆盖已存在的同名预设（旧目录会先备份）
   --dest <目录>    指定预设根目录，默认 $DSH_HOME/.agent-presets 或 ~/.dsh/.agent-presets
   -h, --help       显示这段说明
@@ -24,6 +24,12 @@ EOF
 DEST_ROOT=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --preset)
+      if [ $# -lt 2 ]; then
+        echo "install: --preset 需要一个预设 id" >&2
+        exit 2
+      fi
+      PRESET_ID="$2"; shift 2 ;;
     --force) FORCE=1; shift ;;
     --dest)
       if [ $# -lt 2 ]; then
@@ -38,6 +44,13 @@ while [ $# -gt 0 ]; do
       exit 2 ;;
   esac
 done
+
+case "$PRESET_ID" in
+  codex-mode|codex-ptc-mode) ;;
+  *)
+    echo "install: 不支持的预设 id $PRESET_ID；可选 codex-mode 或 codex-ptc-mode" >&2
+    exit 2 ;;
+esac
 
 # Resolve the source next to this script so the installer works from any cwd.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -75,17 +88,25 @@ if [ -e "$DEST" ]; then
     echo "install: $DEST 已存在。要更新请加 --force（旧目录会备份）。" >&2
     exit 1
   fi
-  BACKUP="$DEST.bak.$(date +%Y%m%d%H%M%S)"
+  BACKUP_BASE="$DEST.bak.$(date +%Y%m%d%H%M%S)"
+  BACKUP="$BACKUP_BASE"
+  BACKUP_SUFFIX=0
+  while [ -e "$BACKUP" ]; do
+    BACKUP_SUFFIX=$((BACKUP_SUFFIX + 1))
+    BACKUP="$BACKUP_BASE.$BACKUP_SUFFIX"
+  done
   mv -- "$DEST" "$BACKUP"
   echo "install: 旧版本已备份到 $BACKUP"
 fi
 
 mkdir -p -- "$DEST"
-cp -- "$SRC/agent.cordis.yml" "$DEST/agent.cordis.yml"
-if [ -f "$SRC/preset.yml" ]; then
-  cp -- "$SRC/preset.yml" "$DEST/preset.yml"
-fi
-chmod 644 "$DEST"/*.yml
+cp -R -- "$SRC/." "$DEST/"
+find "$DEST" -type f -exec chmod 644 {} +
+
+case "$PRESET_ID" in
+  codex-ptc-mode) DISPLAY_NAME="Codex PTC 模式" ;;
+  *) DISPLAY_NAME="Codex 模式" ;;
+esac
 
 echo "install: 已安装到 $DEST"
-echo "install: 在 DSH 里新建会话，模式选择器里选「Codex 模式」即可（不需要重启）。"
+echo "install: 在 DSH 里新建空白会话，模式选择器里选「${DISPLAY_NAME}」即可（不需要重启）。"

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-08-21",
+  "release": "v0.6.0",
+  "candidate": "codex-ptc-mode/runtime-v12",
+  "environment": {
+    "dsh": "0.1.0-rc.6",
+    "node": "24.15.0",
+    "reasoningEffort": "max",
+    "network": "VPN/proxy enabled",
+    "workspace": "macOS local repository",
+    "runsPerCombination": 1
+  },
+  "metricDefinitions": {
+    "wallSeconds": "End-to-end benchmark-runner elapsed time, including session/bootstrap overhead",
+    "turnSeconds": "DSH turn/start to turn/end elapsed time from the persisted session",
+    "ttftSeconds": "DSH turn/start to first persisted assistant message",
+    "inputTokens": "Sum of inputTokens and cacheReadTokens over all model steps",
+    "outputTokens": "Sum of outputTokens over all model steps",
+    "strictSuccess": "Final line exactly matches the required output contract"
+  },
+  "task": {
+    "kind": "bounded cross-file read-only configuration trace",
+    "summary": "Read one explicit preset manifest, derive its controller path, read the first 60 controller lines, compare five fields, and emit one exact line. Shell, web, plans, subagents, edits, and extra checks were forbidden.",
+    "expectedShape": "presetController=...; resolvedController=...; convergence=...; broad=...; threshold=...; retain=...; controllerMatches=true|false"
+  },
+  "results": [
+    {"model":"DeepSeek V4 Flash","providerLabel":"deepseek-official","mode":"Standard","wallSeconds":9.015,"turnSeconds":7.942,"ttftSeconds":3.733,"inputTokens":34980,"outputTokens":763,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Flash","providerLabel":"deepseek-official","mode":"PTC","wallSeconds":9.013,"turnSeconds":8.457,"ttftSeconds":3.536,"inputTokens":38187,"outputTokens":960,"toolCalls":["run_code","run_code"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Flash","providerLabel":"deepseek-official","mode":"Codex","wallSeconds":7.892,"turnSeconds":6.748,"ttftSeconds":2.785,"inputTokens":27610,"outputTokens":737,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Flash","providerLabel":"deepseek-official","mode":"Codex PTC","wallSeconds":6.763,"turnSeconds":6.324,"ttftSeconds":2.506,"inputTokens":14560,"outputTokens":627,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+
+    {"model":"DeepSeek V4 Pro","providerLabel":"deepseek-official","mode":"Standard","wallSeconds":13.525,"turnSeconds":12.983,"ttftSeconds":5.365,"inputTokens":34888,"outputTokens":791,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Pro","providerLabel":"deepseek-official","mode":"PTC","wallSeconds":62.744,"turnSeconds":62.158,"ttftSeconds":58.878,"inputTokens":25300,"outputTokens":3972,"toolCalls":["run_code"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Pro","providerLabel":"deepseek-official","mode":"Codex","wallSeconds":15.759,"turnSeconds":14.527,"ttftSeconds":5.524,"inputTokens":27627,"outputTokens":835,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"DeepSeek V4 Pro","providerLabel":"deepseek-official","mode":"Codex PTC","wallSeconds":13.452,"turnSeconds":12.343,"ttftSeconds":4.607,"inputTokens":14747,"outputTokens":748,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":false,"strictFailure":"presetController contained the controller export name instead of the requested relative path"},
+
+    {"model":"GPT-5.6 Sol","providerLabel":"gpt","mode":"Standard","wallSeconds":15.764,"turnSeconds":15.280,"ttftSeconds":6.610,"inputTokens":35048,"outputTokens":259,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"GPT-5.6 Sol","providerLabel":"gpt","mode":"PTC","wallSeconds":38.078,"turnSeconds":37.149,"ttftSeconds":5.785,"inputTokens":49124,"outputTokens":4343,"toolCalls":["run_code","run_code"],"transportRetries":0,"strictSuccess":true},
+    {"model":"GPT-5.6 Sol","providerLabel":"gpt","mode":"Codex","wallSeconds":13.543,"turnSeconds":13.054,"ttftSeconds":4.093,"inputTokens":30178,"outputTokens":280,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"GPT-5.6 Sol","providerLabel":"gpt","mode":"Codex PTC","wallSeconds":11.197,"turnSeconds":10.403,"ttftSeconds":2.957,"inputTokens":19994,"outputTokens":280,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+
+    {"model":"Claude Opus 5","providerLabel":"claude","mode":"Standard","wallSeconds":12.377,"turnSeconds":12.200,"ttftSeconds":3.660,"inputTokens":83124,"outputTokens":274,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"Claude Opus 5","providerLabel":"claude","mode":"PTC","wallSeconds":25.826,"turnSeconds":24.878,"ttftSeconds":5.028,"inputTokens":102062,"outputTokens":2694,"toolCalls":["run_code","run_code"],"transportRetries":0,"strictSuccess":true},
+    {"model":"Claude Opus 5","providerLabel":"claude","mode":"Codex","wallSeconds":12.355,"turnSeconds":12.030,"ttftSeconds":3.602,"inputTokens":72372,"outputTokens":237,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"Claude Opus 5","providerLabel":"claude","mode":"Codex PTC","wallSeconds":19.066,"turnSeconds":17.858,"ttftSeconds":2.830,"inputTokens":51026,"outputTokens":205,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+
+    {"model":"Claude Sonnet 5","providerLabel":"claude","mode":"Standard","wallSeconds":21.293,"turnSeconds":20.662,"ttftSeconds":8.146,"inputTokens":73804,"outputTokens":325,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"Claude Sonnet 5","providerLabel":"claude","mode":"PTC","wallSeconds":102.013,"turnSeconds":101.099,"ttftSeconds":83.740,"inputTokens":95467,"outputTokens":850,"toolCalls":["run_code","run_code"],"transportRetries":1,"strictSuccess":false,"strictFailure":"presetController had extra quote characters"},
+    {"model":"Claude Sonnet 5","providerLabel":"claude","mode":"Codex","wallSeconds":72.928,"turnSeconds":72.530,"ttftSeconds":59.554,"inputTokens":68823,"outputTokens":402,"toolCalls":["read","read"],"transportRetries":0,"strictSuccess":true},
+    {"model":"Claude Sonnet 5","providerLabel":"claude","mode":"Codex PTC","wallSeconds":93.943,"turnSeconds":93.594,"ttftSeconds":81.413,"inputTokens":48826,"outputTokens":317,"toolCalls":["read","read"],"transportRetries":1,"strictSuccess":true}
+  ],
+  "developmentBaseline": {
+    "description": "Internal code-only Codex PTC candidate versus adaptive v12. These values use the same persisted DSH turn elapsed metric.",
+    "rows": [
+      {"model":"GPT-5.6 Sol","codeOnlySeconds":52.584,"adaptiveSeconds":10.403,"codeOnlyInputTokens":27473,"adaptiveInputTokens":19994,"codeOnlyOutputTokens":4627,"adaptiveOutputTokens":280},
+      {"model":"Claude Opus 5","codeOnlySeconds":21.053,"adaptiveSeconds":17.858,"codeOnlyInputTokens":60327,"adaptiveInputTokens":51026,"codeOnlyOutputTokens":2706,"adaptiveOutputTokens":205},
+      {"model":"Claude Sonnet 5","codeOnlySeconds":114.020,"adaptiveSeconds":93.594,"codeOnlyInputTokens":56413,"adaptiveInputTokens":48826,"codeOnlyOutputTokens":4799,"adaptiveOutputTokens":317}
+    ]
+  },
+  "codePathRegression": {
+    "model": "GPT-5.6 Sol",
+    "reasoningEffort": "max",
+    "turnSeconds": 39.759,
+    "runnerWallSeconds": 40.298,
+    "inputTokens": 25868,
+    "outputTokens": 2022,
+    "toolCalls": ["run_code"],
+    "strictSuccess": true,
+    "purpose": "Verify that a derived glob/read dependency chain still selects Code Mode and completes in one model-visible run_code call"
+  }
+}

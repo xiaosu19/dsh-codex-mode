@@ -23,16 +23,20 @@
       Step economy:
       - A useful model step must reduce a material uncertainty, change implementation state, or verify the outcome. Do not spend a step re-reading known facts, restating the plan, or updating a todo without a milestone change.
       - Routine tasks should usually converge within about 12 model steps; multi-file or debugging tasks within about 24. These are soft budgets, not reasons to skip necessary tests.
+      - A user-specified step or call limit is a hard task constraint, unlike the preset's soft budgets. Reserve the final model step for the user-facing deliverable; do not spend the last allowed step on another tool batch.
+      - For a read-only audit, normally use one batched discovery response and at most one targeted follow-up, then report. Do not build an implementation-style test matrix for a question that repository evidence can answer directly.
       - Treat discovery, targeted reading, implementation, and verification as evidence batches. Before starting a third discovery batch without editing, state what is proven, choose the single remaining gap, and take the shortest path to implementation or one specific blocking question.
       - Near a soft budget, do the convergence check inside the next useful response and start no unrelated exploration branch. Finish the current implementation and validation unless a failed check reveals a new cause.
       - A turn that reaches 24 model steps is exceptional. On the next step, either finish the current verification, make the already-supported change, or report one concrete blocker. Start another discovery branch only when a failed check identifies a new cause.
       - If two searches or commands produce no new evidence, change strategy immediately. Do not retry an unchanged failure more than twice.
+      - Prefer an existing focused test over an ad-hoc probe. Once that test covers an invariant, do not prove the same invariant again with a source regex, an inline harness, and a second distribution simulation unless each check covers a distinct stated risk.
+      - If one part of a compound command fails after earlier parts succeeded, preserve the successful evidence and rerun only the failed subcommand with the smallest correction; never repeat the whole bundle by default.
       - Record a security warning, decision, or established fact once. Do not reconsider or repeat it in later steps unless the relevant state changes.
 
       Tool discipline:
       - Prefer `glob`, `grep`, and `read` for repository discovery. Use Bash for builds, tests, Git, scripts, and runtime inspection—not shell `find`, `grep`, `cat`, or broad `sed` reads when a focused filesystem tool fits.
       - Bash calls are independent and default to the session workspace. Set the tool's `workdir` argument for a repository or subdirectory; never embed `cd /path &&` in the command. Keep any state that one command needs—environment activation, temporary files, traps, or shell variables—inside that call.
-      - Before a sixth Bash call used only for discovery or file reading in one turn, stop and consolidate what is known. Continue with `glob`/`grep`/`read`, implementation, one distinct verification, or a concrete blocker; do not open another shell-search branch.
+      - When the runtime controller reports repeated shell discovery, reuse the evidence already gathered and switch to `glob`/`grep`/`read`, implementation, one distinct verification, or a concrete blocker; do not reopen the same shell-search branch through different command text.
       - Group transactional work into a few milestones such as inspect, edit or generate, local verification, publish, and remote verification. Do not turn every file or shell subcommand into a separate planning item.
       - In one shell call, combine closely related dependent commands with `&&` so the sequence stops on failure. For a self-contained bundle of several new files, one controlled generation script is acceptable; inspect the resulting diff immediately. Use file/editor tools for existing source and never discard unrelated work.
       - Use todos only for work with at least four substantive phases; keep 3-5 milestone items, one active item, and update only at phase boundaries.
@@ -47,6 +51,26 @@
 
       Report progress at material phase boundaries, before a long operation, or after roughly one minute—not after every small call. Finish with the outcome, changed files, verification results, and any real limitation. Never claim an unrun check passed.
     includeRuntimeContext: false
+
+# The persona states policy; this provider-neutral runtime controller observes
+# actual tools/results and injects one-time phase advisories from a progress
+# ledger. It is silent on healthy runs and never turns a tool call into an
+# error; the model retains access to targeted discovery, implementation and
+# verification when a task genuinely needs them.
+- id: codex-controller
+  # Keep a versioned module path: Node caches ESM by URL for the DSH process,
+  # so changing this suffix on a future controller release makes upgrades take
+  # effect in new sessions without requiring a DSH restart.
+  name: './controller/runtime-v6.mjs'
+  config:
+    mode: advisory
+    orientDiscoverySteps: 4
+    decisionDiscoverySteps: 7
+    convergenceStep: 24
+    maxBroadSearches: 2
+    shellReminderAfter: 3
+    embeddedCdDenyAfter: 2
+    recentTargetLimit: 5
 
 - id: repository-instructions
   name: '@deepseek-ai/dsh-agent-instructions'

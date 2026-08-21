@@ -1,12 +1,14 @@
 <#
 .SYNOPSIS
-  Install the Codex 模式 agent preset into this machine's DSH preset root.
+  Install one DSH Codex agent preset into this machine's user preset root.
 
 .DESCRIPTION
-  The preset root is "$env:DSH_HOME\.agent-presets" and falls back to
-  "$HOME\.dsh\.agent-presets", matching how DSH itself resolves its home.
-  Nothing is overwritten without -Force, and -Force keeps a timestamped
-  backup instead of deleting the previous install.
+  The default remains codex-mode. Select the hybrid explicitly with
+  -Preset codex-ptc-mode. Nothing is overwritten without -Force, and -Force
+  keeps a timestamped recoverable backup instead of deleting the prior install.
+
+.PARAMETER Preset
+  Preset id to install: codex-mode (default) or codex-ptc-mode.
 
 .PARAMETER Force
   Overwrite an existing preset with the same id (the old directory is backed up first).
@@ -18,16 +20,18 @@
   powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\install.ps1 -Force
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode -Force
 #>
 [CmdletBinding()]
 param(
+    [ValidateSet('codex-mode', 'codex-ptc-mode')]
+    [string]$Preset = 'codex-mode',
     [switch]$Force,
     [string]$Dest
 )
 
 $ErrorActionPreference = 'Stop'
-$presetId = 'codex-mode'
+$presetId = $Preset
 
 # Resolve the source next to this script so the installer works from any cwd.
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -55,17 +59,22 @@ if (Test-Path -LiteralPath $target) {
     if (-not $Force) {
         Write-Error "install: $target 已存在。要更新请加 -Force（旧目录会备份）。"
     }
-    $backup = "$target.bak.$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $backupBase = "$target.bak.$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $backup = $backupBase
+    $backupSuffix = 0
+    while (Test-Path -LiteralPath $backup) {
+        $backupSuffix += 1
+        $backup = "$backupBase.$backupSuffix"
+    }
     Move-Item -LiteralPath $target -Destination $backup
     Write-Host "install: 旧版本已备份到 $backup"
 }
 
 New-Item -ItemType Directory -Force -Path $target | Out-Null
-Copy-Item -LiteralPath (Join-Path $src 'agent.cordis.yml') -Destination (Join-Path $target 'agent.cordis.yml')
-$metadata = Join-Path $src 'preset.yml'
-if (Test-Path -LiteralPath $metadata -PathType Leaf) {
-    Copy-Item -LiteralPath $metadata -Destination (Join-Path $target 'preset.yml')
+Get-ChildItem -LiteralPath $src -Force | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination $target -Recurse -Force
 }
 
+$displayName = if ($presetId -eq 'codex-ptc-mode') { 'Codex PTC 模式' } else { 'Codex 模式' }
 Write-Host "install: 已安装到 $target"
-Write-Host "install: 在 DSH 里新建会话，模式选择器里选「Codex 模式」即可（不需要重启）。"
+Write-Host "install: 在 DSH 里新建空白会话，模式选择器里选「$displayName」即可（不需要重启）。"

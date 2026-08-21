@@ -1,69 +1,37 @@
-# DSH Codex + Codex PTC 双模式
+# DSH Codex + Codex PTC
 
-给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 使用的两个独立用户级 agent preset：**Codex 模式**和 **Codex PTC 模式**。
+让 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 在真实代码库任务中具备更稳定的工程闭环，并根据任务形态在质量、速度和 token 成本之间做选择。本项目提供两个可同时安装、彼此独立的用户级 agent preset：**Codex 模式**与 **Codex PTC 模式**。
 
-两者可以同时安装、同时出现在模式选择器里，目录 id 和显示名称都不同，不会互相覆盖，也不会把 Codex PTC 自动改成 Codex。
+## 项目优势
 
-## 仓库里的两个模式
+- **完整的工程闭环**：围绕理解目标、收集证据、最小修改和验证结果组织执行，不把“写完代码”误当成“任务完成”。
+- **减少无效工具调用**：使用结构化 `workdir`、定向搜索、证据账本和一次性收敛建议，降低重复 `cd`、重复读取、根目录扫描和超长工具链。
+- **按任务选择工具面**：既保留直接、稳定的原生工具模式，也提供能把搜索、命令、修改与验证编排进一次程序的 PTC 模式，不强迫所有任务使用同一种执行方式。
+- **控制长任务 token 成本**：按模型真实上下文容量提前压缩、裁剪工具结果；Codex PTC 还会让简单读取避开 TypeScript 生成，只在程序编排有收益时使用 `run_code`。
+- **非阻断式控制**：运行时控制器只依据真实工具结果给出一次性建议，不拒绝工具调用，也不会把正常收敛提醒制造成红色错误。
+- **模型与 provider 中立**：工具策略和压缩比例不绑定模型名称，可用于 GPT、Claude、DeepSeek 等不同路由；模型和推理档位仍由会话自行选择。
+- **轻量、可审计**：使用 DSH 的公开插件行和事件钩子，控制器仅依赖 Node.js 内置模块，不引入密钥、个人配置或第三方运行时依赖。
 
-| 显示名称 | preset id | 工具策略 | 适合场景 | macOS/Linux 安装 |
-| --- | --- | --- | --- | --- |
-| Codex 模式 | `codex-mode` | 直接使用原生文件、搜索、Shell 等工具 | 更看重稳定性、严格输出和通用工程控制 | `./install.sh` |
-| Codex PTC 模式 | `codex-ptc-mode` | 有界只读走原生快路径；搜索、扇出、命令、修改和验证链走 `run_code` + SDK | 希望降低输入 token，同时保留确定性程序编排 | `./install.sh --preset codex-ptc-mode` |
+## 两个模式怎么选
 
-Codex 模式是质量优先且控制成本的通用工程模式。persona 负责授权和工作原则，本地控制器根据真实工具结果维护阶段和证据账本；配合结构化 `workdir`、最小修改、验证闭环与按上下文容量缩放的压缩策略，减少重复 `cd`、无效搜索和超长调用链。
+| 模式 | preset id | 核心策略 | 更适合 |
+| --- | --- | --- | --- |
+| Codex 模式 | `codex-mode` | 模型直接调用原生文件、搜索与 Shell 工具，控制器维护阶段和证据 | 重视严格输出、稳定性和通用工程控制的任务 |
+| Codex PTC 模式 | `codex-ptc-mode` | 简单有界读取走原生快路径；搜索、扇出、命令、修改和验证链走 `run_code` + SDK | 希望降低输入 token，并用程序完成确定性多步编排的任务 |
 
-Codex PTC 模式保留这些工程策略，并按任务形态选择工具面。简单、有明确文件边界的只读任务不生成 TypeScript；只有程序编排真正有收益时才使用 PTC。两个控制器都只给非阻断的一次性建议，不会把收敛提醒制造成红色工具错误。
+### Codex 模式
 
-## 在 DSH 里怎么找到这两个模式
+Codex 模式以质量和稳定性为优先。persona 定义授权边界与工程原则，模型直接使用 DSH 原生工具完成探索、修改和验证；本地控制器根据真实执行结果维护 `orient → decide → implement/recover → verify` 阶段与证据账本。
 
-### 正确入口：新会话的模式选择器
+它适合需求复杂、需要频繁语义判断、修改范围尚不明确，或者对最终验证和严格输出要求较高的通用软件工程任务。原生工具轨迹更直观，也更容易逐步检查和恢复。
 
-安装后，在 DSH Web 新建一个**空白会话**，打开输入框附近的模式选择器，应看到两条独立记录：
+### Codex PTC 模式
 
-- `Codex 模式`，id 为 `codex-mode`
-- `Codex PTC 模式`，id 为 `codex-ptc-mode`
+Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证闭环，同时加入自适应工具面选择器：少量、路径明确的纯读取直接使用原生 `read`，不生成 TypeScript；需要搜索、目录扇出、Shell、写入或验证依赖链时，使用 Code Mode SDK 和 `run_code` 把确定性步骤集中编排。
 
-也可以在 DSH 设置里的 Agent preset 管理区域查看名单。已有内容的会话不能中途更换 preset；验证安装或升级时应新建空白会话。
+它不是让所有任务强制走 PTC，也不是固定同时暴露两套工具。选择依据是任务形态，而不是模型名称、仓库路径或测试答案，因此优化能够推广到真实工程任务。它更适合工具调用较多、可程序化串联，并且希望控制输入 token 的工作。
 
-磁盘上可以这样确认：
-
-```bash
-DSH_ROOT="${DSH_HOME:-$HOME/.dsh}"
-find "$DSH_ROOT/.agent-presets" -maxdepth 1 -type d \
-  \( -name 'codex-mode' -o -name 'codex-ptc-mode' \) -print
-```
-
-正常情况下会看到：
-
-```text
-.../.agent-presets/codex-mode
-.../.agent-presets/codex-ptc-mode
-```
-
-安装器覆盖更新时生成的 `*.bak.<时间戳>` 目录只是可恢复备份，名称不符合 DSH 的 preset id 规则，不会成为新的模式。
-
-### 为什么 `dsh plugin` 查不到模式
-
-`dsh plugin --profile web ...` 管理的是安装进 profile 的 npm/Cordis **plugin bundle**，本质上会把后续参数转交给 pnpm，并把声明了 `dsh.bundle.patch` 的包加入 profile 层。它不会列出用户级 agent preset。
-
-例如下面的命令只会列出 Web profile 的插件依赖，不会显示 Codex/Codex PTC：
-
-```bash
-dsh plugin --profile web list --depth 0
-```
-
-本仓库当前发布的是 `~/.dsh/.agent-presets/` 下的会话级 preset，不是 `dsh.bundle`，因此不要用 `dsh plugin add` 安装它。
-
-### 在插件市场或 GitHub Topic 中搜索
-
-仓库已经带有 [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic。在 DSH 的插件市场页面可以搜索：
-
-- `dsh-codex-mode`
-- `xiaosu19`
-- `Codex PTC`
-
-市场可以发现这个仓库，但只接受 `dsh.bundle.patch` 的市场实现会把它标为“不可作为 profile 插件安装”。请按本 README 的 `install.sh` / `install.ps1` 安装两个 preset。若市场使用缓存索引，新发布或更新后的仓库可能要等下一次索引刷新才出现。
+两个模式拥有不同的目录 id 和显示名称，可以同时安装，不会互相覆盖。安装后新建空白会话，即可在模式选择器中分别选择「Codex 模式」或「Codex PTC 模式」。
 
 ## v0.6.0 实测摘要
 

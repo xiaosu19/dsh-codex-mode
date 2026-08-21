@@ -1,10 +1,66 @@
-# DSH Codex 模式
+# DSH Codex + Codex PTC 双模式
 
-给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 用的一个自定义 agent 预设：**Codex 模式**。
+给 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 使用的两个独立用户级 agent preset：**Codex 模式**和 **Codex PTC 模式**。
 
-质量优先且控制成本的通用工程模式。persona 负责授权和工作原则，本地运行时控制器根据真正执行过的工具与结果维护阶段和证据账本；配合结构化 `workdir`、最小修改、验证闭环与按上下文容量缩放的压缩策略，减少重复 `cd`、无效搜索和超长调用链。控制器只给一次性建议，不拦截工具，也不会把收敛提醒制造成红色工具错误。
+两者可以同时安装、同时出现在模式选择器里，目录 id 和显示名称都不同，不会互相覆盖，也不会把 Codex PTC 自动改成 Codex。
 
-仓库同时发布 **Codex PTC 模式**：简单、有明确文件边界的只读任务直接使用原生工具，不生成 TypeScript；搜索、目录扇出、命令、修改和验证链才使用 `run_code` + 生成 SDK。它的目标不是让所有任务都走 PTC，而是只在程序编排有实际收益时使用 PTC。
+## 仓库里的两个模式
+
+| 显示名称 | preset id | 工具策略 | 适合场景 | macOS/Linux 安装 |
+| --- | --- | --- | --- | --- |
+| Codex 模式 | `codex-mode` | 直接使用原生文件、搜索、Shell 等工具 | 更看重稳定性、严格输出和通用工程控制 | `./install.sh` |
+| Codex PTC 模式 | `codex-ptc-mode` | 有界只读走原生快路径；搜索、扇出、命令、修改和验证链走 `run_code` + SDK | 希望降低输入 token，同时保留确定性程序编排 | `./install.sh --preset codex-ptc-mode` |
+
+Codex 模式是质量优先且控制成本的通用工程模式。persona 负责授权和工作原则，本地控制器根据真实工具结果维护阶段和证据账本；配合结构化 `workdir`、最小修改、验证闭环与按上下文容量缩放的压缩策略，减少重复 `cd`、无效搜索和超长调用链。
+
+Codex PTC 模式保留这些工程策略，并按任务形态选择工具面。简单、有明确文件边界的只读任务不生成 TypeScript；只有程序编排真正有收益时才使用 PTC。两个控制器都只给非阻断的一次性建议，不会把收敛提醒制造成红色工具错误。
+
+## 在 DSH 里怎么找到这两个模式
+
+### 正确入口：新会话的模式选择器
+
+安装后，在 DSH Web 新建一个**空白会话**，打开输入框附近的模式选择器，应看到两条独立记录：
+
+- `Codex 模式`，id 为 `codex-mode`
+- `Codex PTC 模式`，id 为 `codex-ptc-mode`
+
+也可以在 DSH 设置里的 Agent preset 管理区域查看名单。已有内容的会话不能中途更换 preset；验证安装或升级时应新建空白会话。
+
+磁盘上可以这样确认：
+
+```bash
+DSH_ROOT="${DSH_HOME:-$HOME/.dsh}"
+find "$DSH_ROOT/.agent-presets" -maxdepth 1 -type d -name 'codex-*' -print
+```
+
+正常情况下会看到：
+
+```text
+.../.agent-presets/codex-mode
+.../.agent-presets/codex-ptc-mode
+```
+
+### 为什么 `dsh plugin` 查不到模式
+
+`dsh plugin --profile web ...` 管理的是安装进 profile 的 npm/Cordis **plugin bundle**，本质上会把后续参数转交给 pnpm，并把声明了 `dsh.bundle.patch` 的包加入 profile 层。它不会列出用户级 agent preset。
+
+例如下面的命令只会列出 Web profile 的插件依赖，不会显示 Codex/Codex PTC：
+
+```bash
+dsh plugin --profile web list --depth 0
+```
+
+本仓库当前发布的是 `~/.dsh/.agent-presets/` 下的会话级 preset，不是 `dsh.bundle`，因此不要用 `dsh plugin add` 安装它。
+
+### 在插件市场或 GitHub Topic 中搜索
+
+仓库已经带有 [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic。在 DSH 的插件市场页面可以搜索：
+
+- `dsh-codex-mode`
+- `xiaosu19`
+- `Codex PTC`
+
+市场可以发现这个仓库，但只接受 `dsh.bundle.patch` 的市场实现会把它标为“不可作为 profile 插件安装”。请按本 README 的 `install.sh` / `install.ps1` 安装两个 preset。若市场使用缓存索引，新发布或更新后的仓库可能要等下一次索引刷新才出现。
 
 ## v0.6.0 实测摘要
 
@@ -14,13 +70,14 @@
 
 ## 这是什么
 
-DSH 的一个 agent 预设就是一个目录。本预设包含组合、界面元数据和一个随预设分发的本地控制器：
+DSH 的一个 agent preset 就是一个目录。本仓库的两个 preset 各自包含组合、界面元数据和独立控制器：
 
 | 文件 | 作用 |
 | --- | --- |
 | `agent.cordis.yml` | 组合定义：persona 提示词 + 挂载哪些工具行（必需） |
 | `preset.yml` | 界面上显示的名字、描述、排序（可选） |
-| `controller/runtime-v6.mjs` | 观察真实 agent/tool loop、维护阶段与证据账本、给出非阻断的一次性纠偏建议 |
+| `presets/codex-mode/controller/runtime-v6.mjs` | Codex 模式的阶段/证据控制器 |
+| `presets/codex-ptc-mode/controller/runtime-v12.mjs` | Codex PTC 的阶段/证据控制器和自适应工具面选择器 |
 
 目录名就是预设 id。DSH 启动时扫描 `$DSH_HOME/.agent-presets/`（默认 `~/.dsh/.agent-presets/`），发现的预设会出现在会话的模式选择器里。
 
@@ -28,23 +85,25 @@ DSH 的一个 agent 预设就是一个目录。本预设包含组合、界面元
 
 ## 安装
 
-### macOS / Linux
+### macOS / Linux：安装两个模式
 
 ```bash
 git clone https://github.com/xiaosu19/dsh-codex-mode.git
 cd dsh-codex-mode
 ./install.sh
+./install.sh --preset codex-ptc-mode
 ```
 
-### Windows (PowerShell)
+### Windows (PowerShell)：安装两个模式
 
 ```powershell
 git clone https://github.com/xiaosu19/dsh-codex-mode.git
 cd dsh-codex-mode
 powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode
 ```
 
-### 安装 Codex PTC 混合模式
+### 只安装 Codex PTC 混合模式
 
 仓库同时包含独立的 `codex-ptc-mode` preset。默认安装行为仍是上面的 `codex-mode`；只有显式传参才安装混合模式：
 
@@ -64,16 +123,17 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode
 
 ### 手动安装
 
-把 `presets/codex-mode/` 整个目录复制到预设根目录即可：
+把两个 preset 目录分别复制到预设根目录：
 
 ```bash
 mkdir -p ~/.dsh/.agent-presets
 cp -R presets/codex-mode ~/.dsh/.agent-presets/
+cp -R presets/codex-ptc-mode ~/.dsh/.agent-presets/
 ```
 
 如果设了 `$DSH_HOME`，就换成 `$DSH_HOME/.agent-presets/`。
 
-安装完在 DSH 里新建一个会话，模式选择器里选「Codex 模式」。正式版本会在控制器行为变化时提升 `runtime-vN.mjs` 的文件名，绕过 Node 的 ESM URL 缓存，因此从正式版本升级后通常不用重启 DSH；如果直接原地修改同一个本地控制器文件名，则需要重启 DSH 或同时提升文件名。已经打开的会话会继续使用创建时的预设代际和历史上下文，不会在中途换成新文件。
+安装完在 DSH 里新建一个空白会话，模式选择器中会分别出现「Codex 模式」和「Codex PTC 模式」。正式版本会在控制器行为变化时提升 `runtime-vN.mjs` 的文件名，绕过 Node 的 ESM URL 缓存，因此从正式版本升级后通常不用重启 DSH；如果直接原地修改同一个本地控制器文件名，则需要重启 DSH 或同时提升文件名。已经打开的会话会继续使用创建时的预设代际和历史上下文，不会在中途换成新文件。
 
 ### 覆盖已有安装
 
@@ -89,9 +149,10 @@ cp -R presets/codex-mode ~/.dsh/.agent-presets/
 
 ```bash
 rm -rf ~/.dsh/.agent-presets/codex-mode
+rm -rf ~/.dsh/.agent-presets/codex-ptc-mode
 ```
 
-## 这个预设装了什么
+## 这些预设装了什么
 
 `agent.cordis.yml` 挂载的行，都是 DSH 公开的组合插件：
 

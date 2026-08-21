@@ -1,0 +1,20 @@
+{
+  "name": "dsh-codex-mode",
+  "version": "0.6.0",
+  "description": "Provider-neutral Codex and adaptive Codex PTC agent presets for DeepSeek Harness",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:xiaosu19/dsh-codex-mode",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "agent-preset",
+    "codex",
+    "ptc"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

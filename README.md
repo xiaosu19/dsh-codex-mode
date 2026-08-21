@@ -33,6 +33,16 @@ Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证
 
 两个模式拥有不同的目录 id 和显示名称，可以同时安装，不会互相覆盖。安装后新建空白会话，即可在模式选择器中分别选择「Codex 模式」或「Codex PTC 模式」。
 
+### 在插件市场或 GitHub Topic 中搜索
+
+仓库已经带有 [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic。在 DSH 的插件市场页面可以搜索：
+
+- `dsh-codex-mode`
+- `xiaosu19`
+- `Codex PTC`
+
+市场可以发现这个仓库，但只接受 `dsh.bundle.patch` 的市场实现会把它标为“不可作为 profile 插件安装”。请按本 README 的 `install.sh` / `install.ps1` 安装两个 preset。若市场使用缓存索引，新发布或更新后的仓库可能要等下一次索引刷新才出现。
+
 ## v0.6.0 实测摘要
 
 2026-08-21 在 DSH `0.1.0-rc.6` 上使用 5 个模型、4 种模式、统一 Max 跑了一轮受控只读基准。Codex PTC 的输入 token 合计比 Codex 少 **34.2%**、比 Standard 少 **43.0%**、比 PTC 少 **51.9%**；中位耗时为 **13.45 秒**，与 Codex 的 **13.54 秒**接近。严格输出成功率为 4/5，Standard 与 Codex 为 5/5，因此它是“更省输入的混合工程模式”，不是每个模型上都绝对最快或最稳。

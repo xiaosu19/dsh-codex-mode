@@ -1,23 +1,24 @@
-# DSH Codex + Codex PTC
+# DSH Codex + Codex PTC + Codex Harness
 
-让 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 在真实代码库任务中具备更稳定的工程闭环，并根据任务形态在质量、速度和 token 成本之间做选择。本项目提供两个可同时安装、彼此独立的用户级 agent preset：**Codex 模式**与 **Codex PTC 模式**。
+让 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 在真实代码库任务中具备更稳定的工程闭环，并根据任务形态在质量、速度和 token 成本之间做选择。本项目提供三个可同时安装、彼此独立的用户级 agent preset：**Codex 模式**、**Codex PTC 模式**与使用 DSH 模型路由的 **Codex Harness 模式**。
 
 ## 项目优势
 
 - **完整的工程闭环**：围绕理解目标、收集证据、最小修改和验证结果组织执行，不把“写完代码”误当成“任务完成”。
 - **减少无效工具调用**：使用结构化 `workdir`、定向搜索、证据账本和一次性收敛建议，降低重复 `cd`、重复读取、根目录扫描和超长工具链。
-- **按任务选择工具面**：既保留直接、稳定的原生工具模式，也提供能把搜索、命令、修改与验证编排进一次程序的 PTC 模式，不强迫所有任务使用同一种执行方式。
-- **控制长任务 token 成本**：按模型真实上下文容量提前压缩、裁剪工具结果；Codex PTC 还会让简单读取避开 TypeScript 生成，只在程序编排有收益时使用 `run_code`。
+- **按任务选择工具面**：既保留直接、稳定的原生工具模式，也提供能把批量过滤、命令、修改与验证编排进一次程序的 PTC 模式；小型搜索不会仅因存在多个或依赖调用就被迫生成程序。
+- **控制长任务 token 成本**：按模型真实上下文容量提前压缩、裁剪工具结果；Codex PTC 还会按任务限制原生 schema 或生成 SDK 的工具集合，只在程序编排或中间结果压缩有收益时使用 `run_code`。
 - **非阻断式控制**：运行时控制器只依据真实工具结果给出一次性建议，不拒绝工具调用，也不会把正常收敛提醒制造成红色错误。
-- **模型与 provider 中立**：工具策略和压缩比例不绑定模型名称，可用于 GPT、Claude、DeepSeek 等不同路由；模型和推理档位仍由会话自行选择。
-- **轻量、可审计**：使用 DSH 的公开插件行和事件钩子，控制器仅依赖 Node.js 内置模块，不引入密钥、个人配置或第三方运行时依赖。
+- **模型与 provider 中立**：模型、endpoint、推理档位和上下文容量始终由 DSH 会话与 provider 管理，可用于 GPT、Claude、DeepSeek 等不同路由；Codex Harness 模式也不要求 Codex 登录。
+- **轻量、可审计**：两个原生模式的控制器仅依赖 Node.js 内置模块；可选 Harness 模式的适配包固定版本并在安装前检查。仓库不引入密钥或个人配置。
 
-## 两个模式怎么选
+## 三个模式怎么选
 
 | 模式 | preset id | 核心策略 | 更适合 |
 | --- | --- | --- | --- |
 | Codex 模式 | `codex-mode` | 模型直接调用原生文件、搜索与 Shell 工具，控制器维护阶段和证据 | 重视严格输出、稳定性和通用工程控制的任务 |
-| Codex PTC 模式 | `codex-ptc-mode` | 简单有界读取走原生快路径；搜索、扇出、命令、修改和验证链走 `run_code` + SDK | 希望降低输入 token，并用程序完成确定性多步编排的任务 |
+| Codex PTC 模式 | `codex-ptc-mode` | 有界读取/搜索走精简原生工具；修改、命令或大扇出聚合走任务级精简 `run_code` SDK | 希望降低输入 token，并用程序完成确定性多步编排的任务 |
+| Codex Harness 模式 | `codex-harness-mode` | Codex 兼容的核心工具名、参数与提示层；执行和模型传输仍由 DSH 完成 | 希望在 DSH 插件生态里获得最接近 Codex 工具契约的体验 |
 
 ### Codex 模式
 
@@ -27,11 +28,17 @@ Codex 模式以质量和稳定性为优先。persona 定义授权边界与工程
 
 ### Codex PTC 模式
 
-Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证闭环，同时加入自适应工具面选择器：少量、路径明确的纯读取直接使用原生 `read`，不生成 TypeScript；需要搜索、目录扇出、Shell、写入或验证依赖链时，使用 Code Mode SDK 和 `run_code` 把确定性步骤集中编排。
+Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证闭环，同时加入自适应工具面选择器。有界读取使用原生 `read`；小型仓库检索使用受限的原生 `glob` / `grep` / `read`；带引用的 Web 调研保持直接工具调用。修改、Shell/测试链，以及需要对大量中间结果进行统计、过滤、去重、排序或聚合的任务，才使用 Code Mode 和 `run_code`。
 
-它不是让所有任务强制走 PTC，也不是固定同时暴露两套工具。选择依据是任务形态，而不是模型名称、仓库路径或测试答案，因此优化能够推广到真实工程任务。它更适合工具调用较多、可程序化串联，并且希望控制输入 token 的工作。
+进入 Code Mode 后也不会默认生成全量 SDK：控制器通过 DSH 的 scope restriction 只保留当前任务需要的文件、搜索、Shell、Job、Skill，以及必要时的 Web 工具。选择依据是任务形态，而不是模型名称、仓库路径或测试答案，因此优化能够推广到真实工程任务。
 
-两个模式拥有不同的目录 id 和显示名称，可以同时安装，不会互相覆盖。安装后新建空白会话，即可在模式选择器中分别选择「Codex 模式」或「Codex PTC 模式」。
+### Codex Harness 模式
+
+Codex Harness 模式面向“在 DSH 中使用 Codex Agent 工作方式，但继续调用 DSH 已配置模型”的场景。它通过 [`@shuind/dsh-codex-harness`](https://github.com/shuind/dsh-codex-harness) 把 `exec_command`、`write_stdin`、`apply_patch`、`update_plan` 与 Codex 风格提示层映射到 DSH 的 Shell、文件系统、沙箱、会话和 todo 服务。
+
+该模式不运行 Codex CLI/app-server，不读取 `~/.codex`，不要求 Codex/ChatGPT 登录或额外的 OpenAI API key。为确保 provider 边界，preset 固定关闭兼容层的 hosted Responses 搜索与 `/responses/compact`；本地搜索和上下文压缩继续使用 DSH 服务。具体边界见 [Codex Harness 模式说明](docs/codex-harness-mode.md)。
+
+三个模式拥有不同的目录 id 和显示名称，可以同时安装，不会互相覆盖。安装后新建空白会话，即可分别选择「Codex 模式」「Codex PTC 模式」或「Codex Harness 模式」。
 
 ### 在插件市场或 GitHub Topic 中搜索
 
@@ -41,7 +48,7 @@ Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证
 - `xiaosu19`
 - `Codex PTC`
 
-市场可以发现这个仓库，但只接受 `dsh.bundle.patch` 的市场实现会把它标为“不可作为 profile 插件安装”。请按本 README 的 `install.sh` / `install.ps1` 安装两个 preset。若市场使用缓存索引，新发布或更新后的仓库可能要等下一次索引刷新才出现。
+市场可以发现这个仓库，但只接受 `dsh.bundle.patch` 的市场实现会把它标为“不可作为 profile 插件安装”。请按本 README 的 `install.sh` / `install.ps1` 安装 preset。若市场使用缓存索引，新发布或更新后的仓库可能要等下一次索引刷新才出现。
 
 ## v0.6.0 实测摘要
 
@@ -49,39 +56,48 @@ Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证
 
 测试期间开启了 VPN/代理。耗时会受首 token、provider 负载和传输重试影响，尤其 Sonnet 5 出现明显网络长尾；输入/输出 token、工具调用路径和严格成功率更适合作为稳定比较依据。完整逐模型数据、前后原因、code-only 对比和限制见 [Codex PTC v12 多模型 Max 基准报告](docs/benchmark-max-2026-08-21.md)，机器可读数据见 [`benchmarks/2026-08-21-max-vpn.json`](benchmarks/2026-08-21-max-vpn.json)。
 
+## v13 路由优化实测
+
+2026-08-24 使用 `gpt-5.6-sol Low` 对同一组跨文件只读题和最小修复题进行 v12/v13 前后对比。两题均正确，修复题独立重跑 4/4 通过；v13 输入 token 合计从 109,982 降到 57,056（**-48.1%**），总 token 从 114,439 降到 61,229（**-46.5%**），总回合耗时从 50.566 秒降到 48.480 秒（**-4.1%**）。只读题改走受限原生 `glob` / `grep` / `read`，修改题继续使用裁剪后的 Code SDK。
+
+这也是 VPN/代理环境下的单次方向性样本，不能当作稳定 P50/P95。完整前后数据、固定上下文差异、原因和限制见 [Codex PTC v13 通用路由优化实测](docs/benchmark-v13-2026-08-24.md)，机器可读数据见 [`benchmarks/2026-08-24-v13-sol-low-vpn.json`](benchmarks/2026-08-24-v13-sol-low-vpn.json)。
+
 ## 这是什么
 
-DSH 的一个 agent preset 就是一个目录。本仓库的两个 preset 各自包含组合、界面元数据和独立控制器：
+DSH 的一个 agent preset 就是一个目录。本仓库的三个 preset 都包含组合与界面元数据；两个 DSH 原生模式另带独立控制器，Harness 模式把 Codex 工具运行层交给固定版本的兼容插件：
 
 | 文件 | 作用 |
 | --- | --- |
 | `agent.cordis.yml` | 组合定义：persona 提示词 + 挂载哪些工具行（必需） |
 | `preset.yml` | 界面上显示的名字、描述、排序（可选） |
 | `presets/codex-mode/controller/runtime-v6.mjs` | Codex 模式的阶段/证据控制器 |
-| `presets/codex-ptc-mode/controller/runtime-v12.mjs` | Codex PTC 的阶段/证据控制器和自适应工具面选择器 |
+| `presets/codex-ptc-mode/controller/runtime-v13.mjs` | Codex PTC 的阶段/证据控制器、收益路由和任务级工具面裁剪 |
+| `presets/codex-harness-mode/agent.cordis.yml` | Codex 工具契约到 DSH provider、Shell、文件、压缩和 Skills 的组合边界 |
 
 目录名就是预设 id。DSH 启动时扫描 `$DSH_HOME/.agent-presets/`（默认 `~/.dsh/.agent-presets/`），发现的预设会出现在会话的模式选择器里。
 
-组合只使用 DSH 的公开插件行和公开事件钩子。本地控制器仅依赖 Node 内置模块，不需要安装第三方运行时依赖，也不含任何密钥或个人配置。
+组合只使用 DSH 的公开插件行和公开事件钩子。Codex 与 Codex PTC 的本地控制器仅依赖 Node 内置模块；只有可选的 Codex Harness 模式需要固定版本的 DSH 兼容插件。仓库不含任何密钥或个人配置。
 
 ## 安装
 
-### macOS / Linux：安装两个模式
+### macOS / Linux：安装三个模式
 
 ```bash
 git clone https://github.com/xiaosu19/dsh-codex-mode.git
 cd dsh-codex-mode
 ./install.sh
 ./install.sh --preset codex-ptc-mode
+./install.sh --preset codex-harness-mode
 ```
 
-### Windows (PowerShell)：安装两个模式
+### Windows (PowerShell)：安装三个模式
 
 ```powershell
 git clone https://github.com/xiaosu19/dsh-codex-mode.git
 cd dsh-codex-mode
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-harness-mode
 ```
 
 ### 只安装 Codex PTC 混合模式
@@ -98,23 +114,35 @@ Windows PowerShell：
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode
 ```
 
-它会安装到 `$DSH_HOME/.agent-presets/codex-ptc-mode/`（默认 `~/.dsh/.agent-presets/codex-ptc-mode/`），显示为「Codex PTC 模式」。该模式保留 Codex 模式的授权、最小相关面、最小修改、验证闭环、软步骤预算、证据账本、非阻断检查点和提前压缩。运行时会在每个用户回合开始前选择紧凑工具面：有明确文件边界、无需搜索或目录扇出、无需命令和修改的少量纯读取使用原生工具快路径，不生成 TypeScript；其余任务保持 DSH Code Mode 的 `run_code` + 生成 SDK。确定性的搜索或操作依赖链默认在一次程序内完成，例如 `read → derive → glob/grep → read → extract`；只有出现语义选择、授权边界或需要用户输入时才返回模型开启下一步。它不使用固定 `both`，因此不会让每一步同时承担原生工具 schema 和 SDK 的双份上下文。首版不加入 goal、subagent、workflow 或 Ralph。覆盖更新使用 `--force` / `-Force`，安装器会先保留时间戳备份。
+它会安装到 `$DSH_HOME/.agent-presets/codex-ptc-mode/`（默认 `~/.dsh/.agent-presets/codex-ptc-mode/`），显示为「Codex PTC 模式」。该模式保留 Codex 模式的授权、最小相关面、最小修改、验证闭环、软步骤预算、证据账本、非阻断检查点和提前压缩。运行时会在每个用户回合开始前选择紧凑工具面：少量读取只暴露 `read`；小型仓库检索暴露 `glob` / `grep` / `read`；带引用的联网调研使用直接 Web 工具。只有修改、命令/测试链或能显著过滤、聚合大量中间结果的任务才生成 `run_code` 程序，而且 SDK 会限制到任务所需能力。它不使用固定 `both`，因此不会让每一步同时承担原生工具 schema 和 SDK 的双份上下文。首版不加入 goal、subagent、workflow 或 Ralph。覆盖更新使用 `--force` / `-Force`，安装器会先保留时间戳备份。
 
-工具编排规则也按当前工具面动态注入：原生只读回合只携带简短的有界读取契约并只暴露 `read` schema；只有 Code Mode 回合才恢复完整能力并携带 SDK、搜索、Shell、写入、失败恢复、发布和验证规则。选择依据是任务形态，而不是仓库路径、测试字段或预期答案。
+工具编排规则也按当前工具面动态注入：原生回合只携带简短的有界直接调用契约；Code Mode 回合携带 SDK、失败恢复和验证规则，但 SDK 本身仍按任务裁剪。多个调用或调用之间存在依赖，并不会单独触发 PTC；选择器寻找的是确定性修改/验证流水线，或中间结果相对最终答案明显更大的过滤与聚合工作。
+
+### 只安装 Codex Harness 模式
+
+Harness 模式需要把 DSH 适配层安装到 Web profile。选择该 preset 时，安装器会先检查并在 `dsh` 命令可用时自动安装固定版本：
+
+```bash
+dsh plugin --profile web add @shuind/dsh-codex-harness@0.1.13
+./install.sh --preset codex-harness-mode
+```
+
+这只安装 DSH 插件和 preset，不安装或登录 Codex CLI。兼容插件是首次加入 Web profile 时需要重启一次 DSH Web；以后只覆盖 preset 不需要重启。
 
 ### 手动安装
 
-把两个 preset 目录分别复制到预设根目录：
+把 preset 目录分别复制到预设根目录；复制 Harness 模式前仍需执行上面的 `dsh plugin` 命令：
 
 ```bash
 mkdir -p ~/.dsh/.agent-presets
 cp -R presets/codex-mode ~/.dsh/.agent-presets/
 cp -R presets/codex-ptc-mode ~/.dsh/.agent-presets/
+cp -R presets/codex-harness-mode ~/.dsh/.agent-presets/
 ```
 
 如果设了 `$DSH_HOME`，就换成 `$DSH_HOME/.agent-presets/`。
 
-安装完在 DSH 里新建一个空白会话，模式选择器中会分别出现「Codex 模式」和「Codex PTC 模式」。正式版本会在控制器行为变化时提升 `runtime-vN.mjs` 的文件名，绕过 Node 的 ESM URL 缓存，因此从正式版本升级后通常不用重启 DSH；如果直接原地修改同一个本地控制器文件名，则需要重启 DSH 或同时提升文件名。已经打开的会话会继续使用创建时的预设代际和历史上下文，不会在中途换成新文件。
+安装完在 DSH 里新建一个空白会话，模式选择器中会出现三个独立模式。正式版本会在控制器行为变化时提升 `runtime-vN.mjs` 的文件名，绕过 Node 的 ESM URL 缓存，因此从正式版本升级后通常不用重启 DSH；如果直接原地修改同一个本地控制器文件名，则需要重启 DSH 或同时提升文件名。已经打开的会话会继续使用创建时的预设代际和历史上下文，不会在中途换成新文件。
 
 ### 覆盖已有安装
 
@@ -131,9 +159,12 @@ cp -R presets/codex-ptc-mode ~/.dsh/.agent-presets/
 ```bash
 rm -rf ~/.dsh/.agent-presets/codex-mode
 rm -rf ~/.dsh/.agent-presets/codex-ptc-mode
+rm -rf ~/.dsh/.agent-presets/codex-harness-mode
 ```
 
 ## 这些预设装了什么
+
+以下是 Codex 与 Codex PTC 两个 DSH 原生模式的公共组合。Codex Harness 模式使用更窄的 Codex 工具契约，详见其[单独说明](docs/codex-harness-mode.md)。
 
 `agent.cordis.yml` 挂载的行，都是 DSH 公开的组合插件：
 
@@ -171,6 +202,8 @@ rm -rf ~/.dsh/.agent-presets/codex-ptc-mode
 
 ## 兼容性
 
+`codex-harness-mode` 固定使用 `@shuind/dsh-codex-harness@0.1.13` 作为 DSH 适配层。它不要求 Codex 登录；真正的模型可用性只取决于当前 DSH provider。适配层的远程 GPT 搜索和远程压缩在本 preset 中关闭，因此不会绕过 DSH 模型路由。
+
 在 `@deepseek-ai/dsh` `0.1.0-rc.6` / Node v24 上验证过。预设目录、插件行以及 `agent/pre-step`、`tools/post-execute` 都使用 DSH 的公开约定。控制器刻意不注册 `tools/pre-execute`，因为 DSH 会把 guard denial 持久化为红色工具错误。如果后续 DSH 更改了插件名或事件协议，组合阶段会失败并暴露原因，不会静默退化成只有 persona 的模式。
 
 不需要额外安装 ripgrep。`@deepseek-ai/dsh-tool-fs-search` 自带支持 macOS、Linux 和 Windows 的 ripgrep 二进制，并通过结构化 `glob` / `grep` 工具调用它；即使终端里的 `rg` 不在 PATH，代码检索也能正常工作。
@@ -198,7 +231,7 @@ models:
 npm test
 ```
 
-测试覆盖工具分类、阶段迁移、一次性检查点、根扫描建议、shell 搜索渐进纠偏、`cd`/`workdir` 分流，以及运行时不存在 `tools/pre-execute` 拒绝器。发布包还应执行 `scripts/pack.sh`，从 zip 与 tar.gz 各自解压安装，并由 DSH `agentPreset.list` 和新会话实际 mount 验证。
+测试覆盖任务收益路由、同 presentation 下的工具面切换、SDK allowlist、工具分类、阶段迁移、一次性检查点、根扫描建议、shell 搜索渐进纠偏、`cd`/`workdir` 分流，以及运行时不存在 `tools/pre-execute` 拒绝器。发布包还应执行 `scripts/pack.sh`，从 zip 与 tar.gz 各自解压安装，并由 DSH `agentPreset.list` 和新会话实际 mount 验证。
 
 开发时用同一个失败测试 fixture 分别跑过 Claude、GPT 和 DeepSeek 路由：三者都完成了一行最小修改并通过 2/2 测试。真实长任务也暴露过旧硬保护的反例：“给共享记忆插件增加 GUI 面板”在 24 步内收到 7 次控制器上下文和 9 次控制器制造的工具错误，其中 decision 在第 8、12、16、20 步重复注入。v6 因此移除了 discovery lease 和所有 pre-execute denial；这个失败轨迹已固化为“一次注入、零拒绝”的运行时回归条件。
 
@@ -214,7 +247,7 @@ npm test
 
 ---
 
-**English:** Provider-neutral Codex and adaptive Codex PTC agent presets for DeepSeek Harness. Codex Mode is a quality-first repository engineering mode with explicit authorization, a non-blocking phase/evidence controller, structured `workdir`, minimal diffs, and verification loops. Codex PTC adds a task-shape selector: bounded reads stay on the native fast path without generated TypeScript, while search, fan-out, commands, mutation, and verification pipelines use the Code Mode SDK through `run_code`. In the 2026-08-21 single-run Max benchmark, Codex PTC used 34.2% fewer aggregate input tokens than Codex, with important VPN, endpoint, and sample-size caveats documented in the full report. Install it with `./install.sh --preset codex-ptc-mode` (or `install.ps1 -Preset codex-ptc-mode` on Windows), then start a fresh session and select "Codex PTC 模式". No third-party controller dependencies and no credentials.
+**English:** Three DSH agent presets: provider-neutral Codex, adaptive Codex PTC, and Codex Harness Mode. The first two use DSH-native tools and advisory controllers. Harness Mode maps the Codex-compatible `exec_command`, `write_stdin`, `apply_patch`, and `update_plan` contract onto DSH while leaving model access, reasoning effort, context capacity, plugins, filesystem, sandbox, and sessions under DSH ownership. It does not start Codex CLI/app-server or require a Codex login. Hosted Responses search and remote compaction are disabled so requests never bypass the selected DSH provider.
 
 ## License
 

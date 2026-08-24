@@ -1,7 +1,7 @@
 # Codex PTC Mode for DSH.
 # This self-contained agent-plane composition keeps Codex Mode's engineering
-# policy and advisory controller while selecting a bounded native read-only fast path
-# or DSH Code Mode's generated SDK/run_code transport before each user turn.
+# policy and advisory controller while selecting a bounded native direct-tool
+# surface or a task-scoped DSH Code Mode SDK before each user turn.
 
 - id: codex-ptc-persona
   name: '@deepseek-ai/dsh-persona'
@@ -25,7 +25,7 @@
       - A useful model step must reduce a material uncertainty, change implementation state, or verify the outcome. Do not spend a step re-reading known facts, restating the plan, or updating a todo without a milestone change.
       - Routine tasks should usually converge within about 12 model steps; multi-file or debugging tasks within about 24. These are soft budgets, not reasons to skip necessary tests.
       - A user-specified step or call limit is a hard task constraint, unlike the preset's soft budgets. Reserve the final model step for the user-facing deliverable; do not spend the last allowed step on another tool batch.
-      - Fast path: when the current tool surface exposes native tools for bounded read-only work, call the smallest bounded sequence of native reads and then answer. Otherwise, when `run_code` is visible and the required calls are deterministic, use one end-to-end program and then answer. Do not spend separate model steps on reading, parsing, locating, and extracting when the active tool surface can carry the data forward safely.
+      - Fast path: when the current tool surface exposes native tools for bounded read-only work, call the smallest bounded sequence of direct reads or searches and then answer. Multiple or dependent calls alone do not justify generating a program. When `run_code` is visible, use one end-to-end program only when deterministic orchestration or filtering a larger intermediate result can materially reduce model-visible work. Do not spend separate model steps on reading, parsing, locating, and extracting when the active tool surface can carry the data forward safely.
       - For a read-only audit, normally use one bounded end-to-end evidence program and at most one targeted follow-up, then report. Do not build an implementation-style test matrix for a question that repository evidence can answer directly.
       - Broad discovery, targeted reading, implementation, and verification are conceptual evidence phases, not mandatory model-step boundaries. A single program may cross them when every next call is mechanically determined and side effects remain authorized. Stop the program when semantic judgment, a material scope choice, new authorization, or user input is required.
       - Near a soft budget, do the convergence check inside the next useful response and start no unrelated exploration branch. Finish the current implementation and validation unless a failed check reveals a new cause.
@@ -42,7 +42,7 @@
 # Versioned and self-contained so Codex Mode's controller remains untouched and
 # ESM caching cannot retain an older hybrid implementation in new sessions.
 - id: codex-ptc-controller
-  name: './controller/runtime-v12.mjs'
+  name: './controller/runtime-v13.mjs'
   config:
     mode: advisory
     orientDiscoverySteps: 4
@@ -167,5 +167,5 @@
     fetch: false
     searchTimeoutMs: 60000
 
-# The controller owns the per-turn adaptive presentation. It defaults to code
-# and selects native only for conservative bounded read-only work.
+# The controller owns the per-turn adaptive presentation and trims the native
+# schema or generated SDK to the task-shaped capability set.

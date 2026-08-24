@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0 — 2026-08-24
+
+- 新增独立的 `codex-harness-mode`：在 DSH provider 上使用 Codex 兼容的 Agent 提示层与 `exec_command`、`write_stdin`、`apply_patch`、`update_plan` 工具契约。
+- Harness 模式不启动 Codex CLI/app-server、不读取 Codex 登录，也不要求 OpenAI API key；模型、endpoint、推理档位和上下文容量继续由 DSH 管理。
+- 固定关闭兼容层的 hosted Responses 搜索与远程压缩，防止模型请求绕过当前 DSH provider；搜索与压缩分别使用 DSH 本地服务。
+- macOS/Linux、PowerShell 安装器和发布包支持第三个 preset，并在复制前检查固定版本的 Harness 适配依赖。
+- 新增无凭据安装边界、provider 所有权和打包回归测试。
+- Codex PTC v13 将小型有界 `glob` / `grep` / `read` 纳入原生快路径；多个或依赖调用不再自动触发程序生成。
+- Code Mode 仅在修改/命令流水线或大扇出结果压缩有收益时启用，并通过 per-agent restriction 裁剪生成 SDK 的工具集合。
+
 ## v0.6.0 — 2026-08-21
 
 - 发布独立的自适应 `codex-ptc-mode` preset；简单有界只读任务走原生工具，其余任务走 Code Mode SDK。

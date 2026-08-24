@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build distributable archives containing both Codex presets under dist/.
+# Build distributable archives containing all Codex presets under dist/.
 #
-# The archive contains exactly what a recipient needs: both self-contained
-# preset directories, both installers, the README, and the license. Everything
+# The archive contains exactly what a recipient needs: every preset directory,
+# benchmark reports and raw data, both installers, the README, and the license. Everything
 # unpacks under one top-level folder so extraction never scatters files.
 
 set -euo pipefail
@@ -14,11 +14,17 @@ ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 DIST="$ROOT/dist"
 STAGE="$DIST/$NAME"
 
-for preset in codex-mode codex-ptc-mode; do
+for preset in codex-mode codex-ptc-mode codex-harness-mode; do
   if [ ! -f "$ROOT/presets/$preset/agent.cordis.yml" ] ||
-     [ ! -f "$ROOT/presets/$preset/preset.yml" ] ||
-     [ ! -d "$ROOT/presets/$preset/controller" ]; then
+     [ ! -f "$ROOT/presets/$preset/preset.yml" ]; then
     echo "pack: preset $preset 不完整" >&2
+    exit 1
+  fi
+done
+
+for preset in codex-mode codex-ptc-mode; do
+  if [ ! -d "$ROOT/presets/$preset/controller" ]; then
+    echo "pack: preset $preset 缺少 controller" >&2
     exit 1
   fi
 done
@@ -27,10 +33,14 @@ rm -rf -- "$STAGE"
 mkdir -p -- "$STAGE"
 
 cp -R -- "$ROOT/presets" "$STAGE/presets"
-cp -- "$ROOT/install.sh" "$ROOT/install.ps1" "$ROOT/README.md" "$ROOT/LICENSE" "$STAGE/"
+cp -R -- "$ROOT/docs" "$STAGE/docs"
+cp -R -- "$ROOT/benchmarks" "$STAGE/benchmarks"
+cp -- "$ROOT/install.sh" "$ROOT/install.ps1" "$ROOT/README.md" "$ROOT/CHANGELOG.md" "$ROOT/LICENSE" "$STAGE/"
 chmod 755 "$STAGE/install.sh"
-chmod 644 "$STAGE/install.ps1" "$STAGE/README.md" "$STAGE/LICENSE"
+chmod 644 "$STAGE/install.ps1" "$STAGE/README.md" "$STAGE/CHANGELOG.md" "$STAGE/LICENSE"
 find "$STAGE/presets" -type f -exec chmod 644 {} +
+find "$STAGE/docs" -type f -exec chmod 644 {} +
+find "$STAGE/benchmarks" -type f -exec chmod 644 {} +
 
 # Drop macOS metadata so the archive is clean on other platforms.
 find "$STAGE" -name '.DS_Store' -delete

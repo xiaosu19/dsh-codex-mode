@@ -1,0 +1,3 @@
+name: Codex Harness 模式
+description: 在 DSH provider 上运行 Codex 工具与 Agent 契约；不需要 Codex 登录
+order: 42

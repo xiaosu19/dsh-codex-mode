@@ -1,7 +1,7 @@
 {
   "name": "dsh-codex-mode",
-  "version": "0.6.0",
-  "description": "Provider-neutral Codex and adaptive Codex PTC agent presets for DeepSeek Harness",
+  "version": "0.7.0",
+  "description": "Codex, adaptive Codex PTC, and DSH-native Codex Harness agent presets",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -12,6 +12,7 @@
     "dsh-plugin",
     "agent-preset",
     "codex",
+    "codex-harness",
     "ptc"
   ],
   "scripts": {

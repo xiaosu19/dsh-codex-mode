@@ -1,0 +1,101 @@
+# Codex Harness Mode for DSH.
+#
+# The model, endpoint, credentials and reasoning effort remain owned by DSH.
+# This preset mounts only the Codex-compatible agent/tool contract and delegates
+# execution, filesystem access, policy, sessions and Skills back to DSH.
+
+- id: codex-harness-persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are Codex, a coding agent powered by {{model}} in {{cwd}}. The current
+      DSH provider owns model access; use the Codex agent and tool contract
+      mounted in this session without attempting to start or authenticate a
+      separate Codex runtime.
+    includeRuntimeContext: true
+
+- id: repository-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# This compatibility layer maps Codex's model-facing core tools onto DSH's
+# shell, filesystem, sandbox, session and todo services. It does not call the
+# Codex SDK or Codex CLI. Provider-specific remote search and /responses/compact
+# are disabled so every model request continues through the selected DSH route.
+- id: codex-harness-tools
+  name: '@shuind/dsh-codex-harness'
+  config:
+    hostedWebSearch: false
+    remoteCompact: false
+
+# A local search tool remains available for every DSH provider. This never
+# rewrites the model request into an OpenAI-hosted Responses tool.
+- id: local-web-search
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    search: true
+    fetch: false
+    searchTimeoutMs: 60000
+
+# PTY support is optional. The harness layer retains its pipe-backed
+# exec_command path when the terminal service is unavailable.
+- id: codex-terminal
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: terminals
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+
+# Capacity comes from the active DSH model declaration (including values
+# synchronized from an upstream catalog). No model names are hard-coded here,
+# so a newly discovered model automatically receives a proportional threshold.
+- id: context-management
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: automatic-compaction
+      name: '@deepseek-ai/dsh-compaction-basic'
+      config:
+        thresholdRatio: 0.72
+        retainRatio: 0.18
+        maxTokens: 8192
+        compactionRetries: 1
+
+    - id: compact-command
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# Skills are discovered and executed by DSH. They remain available without
+# changing the four core Codex tool names.
+- id: local-skill-catalog
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: skill-loader
+  name: '@deepseek-ai/dsh-tool-skill'
+
+- id: repeated-call-brake
+  name: '@deepseek-ai/dsh-repeat-tool-reminder'
+  config:
+    thresholds: [2, 4, 6]
+    argumentsPreviewChars: 300
+
+- id: ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'

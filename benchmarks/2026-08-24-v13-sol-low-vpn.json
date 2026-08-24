@@ -1,0 +1,109 @@
+{
+  "date": "2026-08-24",
+  "network": "VPN/proxy environment; latency is directional",
+  "provider": "gpt",
+  "model": "gpt-5.6-sol",
+  "reasoningEffort": "low",
+  "samplesPerTaskVersion": 1,
+  "comparison": "Codex PTC runtime-v12 versus runtime-v13",
+  "runs": [
+    {
+      "task": "cross-file-read",
+      "controller": "runtime-v12",
+      "turnSeconds": 27.193,
+      "ttftSeconds": 15.592,
+      "steps": 4,
+      "inputTokens": 54836,
+      "outputTokens": 1728,
+      "totalTokens": 56564,
+      "firstSystemChars": 37531,
+      "firstToolSchemaChars": 877,
+      "firstToolSchemas": ["run_code"],
+      "modelVisibleCalls": ["run_code", "run_code", "run_code"],
+      "strictSuccess": true
+    },
+    {
+      "task": "cross-file-read",
+      "controller": "runtime-v13",
+      "turnSeconds": 25.69,
+      "ttftSeconds": 11.019,
+      "steps": 4,
+      "inputTokens": 25437,
+      "outputTokens": 663,
+      "totalTokens": 26100,
+      "firstSystemChars": 12795,
+      "firstToolSchemaChars": 2129,
+      "firstToolSchemas": ["glob", "grep", "read"],
+      "modelVisibleCalls": [
+        "grep",
+        "grep",
+        "glob",
+        "read",
+        "read",
+        "read",
+        "read",
+        "read",
+        "read",
+        "read",
+        "read"
+      ],
+      "strictSuccess": true
+    },
+    {
+      "task": "minimal-fix-and-test",
+      "controller": "runtime-v12",
+      "turnSeconds": 23.373,
+      "ttftSeconds": 11.808,
+      "steps": 4,
+      "inputTokens": 55146,
+      "outputTokens": 2729,
+      "totalTokens": 57875,
+      "firstSystemChars": 37530,
+      "firstToolSchemaChars": 877,
+      "firstToolSchemas": ["run_code"],
+      "modelVisibleCalls": ["run_code", "run_code", "run_code"],
+      "childCalls": 18,
+      "strictSuccess": true,
+      "verification": "4/4 tests passed"
+    },
+    {
+      "task": "minimal-fix-and-test",
+      "controller": "runtime-v13",
+      "turnSeconds": 22.79,
+      "ttftSeconds": 9.229,
+      "steps": 3,
+      "inputTokens": 31619,
+      "outputTokens": 3510,
+      "totalTokens": 35129,
+      "firstSystemChars": 26722,
+      "firstToolSchemaChars": 877,
+      "firstToolSchemas": ["run_code"],
+      "modelVisibleCalls": ["run_code", "run_code"],
+      "childCalls": 12,
+      "strictSuccess": true,
+      "verification": "4/4 tests passed"
+    }
+  ],
+  "combined": {
+    "runtime-v12": {
+      "turnSeconds": 50.566,
+      "steps": 8,
+      "inputTokens": 109982,
+      "outputTokens": 4457,
+      "totalTokens": 114439
+    },
+    "runtime-v13": {
+      "turnSeconds": 48.48,
+      "steps": 7,
+      "inputTokens": 57056,
+      "outputTokens": 4173,
+      "totalTokens": 61229
+    },
+    "runtime-v13ChangePercent": {
+      "turnSeconds": -4.13,
+      "inputTokens": -48.12,
+      "outputTokens": -6.37,
+      "totalTokens": -46.5
+    }
+  }
+}

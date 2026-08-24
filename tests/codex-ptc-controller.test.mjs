@@ -22,16 +22,18 @@ import {
   createTurnState,
   observeToolExecution,
   PRESENTATION_GUIDANCE,
+  ROUTE_TOOLSETS,
   renderCheckpoint,
   resolveConfig,
   selectPresentationForMessage,
+  selectRouteForMessage,
   selectCheckpoint,
-} from '../presets/codex-ptc-mode/controller/runtime-v12.mjs'
+} from '../presets/codex-ptc-mode/controller/runtime-v13.mjs'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
 const presetRoot = join(repository, 'presets', 'codex-ptc-mode')
 const compositionPath = join(presetRoot, 'agent.cordis.yml')
-const controllerPath = join(presetRoot, 'controller', 'runtime-v12.mjs')
+const controllerPath = join(presetRoot, 'controller', 'runtime-v13.mjs')
 
 const ok = (text = 'ok') => ({
   isError: false,
@@ -122,20 +124,24 @@ const humanMessage = (text, content = [{ type: 'text', text }]) => ({
 
 test('hybrid preset metadata, adaptive presentation, and compact surface are exact', () => {
   const composition = readFileSync(compositionPath, 'utf8')
+  const codexComposition = readFileSync(
+    join(repository, 'presets', 'codex-mode', 'agent.cordis.yml'),
+    'utf8',
+  )
   const metadata = readFileSync(join(presetRoot, 'preset.yml'), 'utf8')
 
   assert.match(metadata, /^name: Codex PTC 模式$/m)
   assert.match(
     metadata,
-    /^description: Codex 工程策略与非阻断收敛控制，有界纯读取原生快路径结合 Code Mode SDK\/run_code 批量编排和提前上下文压缩。$/m,
+    /^description: Codex 工程策略与非阻断收敛控制，有界原生搜索\/读取结合任务级精简 Code Mode SDK、批量编排和提前上下文压缩。$/m,
   )
   assert.match(metadata, /^order: 7$/m)
-  assert.match(composition, /name: '\.\/controller\/runtime-v12\.mjs'/)
+  assert.match(composition, /name: '\.\/controller\/runtime-v13\.mjs'/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-agent-tool-presentation/)
 
   for (const [key, value] of [
-    ['thresholdRatio', '0.16'],
-    ['retainRatio', '0.04'],
+    ['thresholdRatio', '0.72'],
+    ['retainRatio', '0.18'],
     ['maxTokens', '8192'],
     ['compactionRetries', '1'],
     ['thresholdChars', '4096'],
@@ -145,6 +151,36 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
     assert.match(composition, new RegExp(`^\\s*${key}: ${value}$`, 'm'))
   }
 
+  const millionTokenTargets = [
+    ['gpt', 'gpt-5.6-sol'],
+    ['gpt', 'gpt-5.6-terra'],
+    ['gpt', 'gpt-5.6-luna'],
+    ['claude', 'claude-opus-5'],
+    ['claude', 'claude-opus-4-8'],
+    ['claude', 'claude-opus-4-7'],
+    ['claude', 'claude-opus-4-6'],
+    ['claude', 'claude-sonnet-5'],
+    ['claude', 'claude-sonnet-4-6'],
+    ['claude', 'claude-sonnet-4'],
+    ['claude', 'claude-sonnet-4-20250514'],
+    ['deepseek-official', 'deepseek-v4-pro'],
+    ['deepseek-official', 'deepseek-v4-flash'],
+    ['deepseek-modlens', 'deepseek-v4-pro'],
+    ['deepseek-modlens', 'deepseek-v4-flash'],
+  ]
+  for (const [provider, model] of millionTokenTargets) {
+    assert.match(
+      composition,
+      new RegExp(
+        `provider: ${provider}, model: ${model}, thresholdRatio: 0\\.16, retainTokens: 40000`,
+      ),
+    )
+  }
+
+  const compactionBlock = (source) =>
+    source.match(/    - id: automatic-compaction\n[\s\S]*?\n    - id: compact-command/)?.[0]
+  assert.equal(compactionBlock(composition), compactionBlock(codexComposition))
+
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-tool-goal/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-tool-subagent/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-tool-workflow/)
@@ -152,14 +188,15 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
   assert.doesNotMatch(composition, /^\s*(?:model|reasoningEffort):/m)
 })
 
-test('adaptive orchestration favors native reads and deterministic code pipelines', () => {
+test('adaptive orchestration favors direct bounded work and reduced code pipelines', () => {
   const composition = readFileSync(compositionPath, 'utf8')
   assert.doesNotMatch(composition, /Adaptive tool orchestration:/)
   assert.doesNotMatch(composition, /Tool discipline:/)
-  assert.match(PRESENTATION_GUIDANCE.native, /bounded native read-only fast path/)
+  assert.match(PRESENTATION_GUIDANCE.native, /bounded native direct-tool fast path/)
   assert.doesNotMatch(PRESENTATION_GUIDANCE.native, /run_code/)
   for (const phrase of [
     'Fast path: when the current tool surface exposes native tools for bounded read-only work',
+    'Multiple or dependent calls alone do not justify generating a program',
     'conceptual evidence phases, not mandatory model-step boundaries',
     'A successful bounded read or search that contains no requested match is authoritative absence',
   ]) {
@@ -182,7 +219,7 @@ test('adaptive orchestration favors native reads and deterministic code pipeline
   }
 })
 
-test('presentation selector keeps bounded reads native and broad work in Code Mode', () => {
+test('route selector keeps small direct work native and chooses code for real reduction', () => {
   assert.equal(
     selectPresentationForMessage(
       humanMessage(
@@ -203,7 +240,7 @@ test('presentation selector keeps bounded reads native and broad work in Code Mo
         '先读取 /Users/example/repo/package.json，再 glob 测试目录并读取第一个测试文件。',
       ),
     ),
-    'code',
+    'native',
   )
   assert.equal(
     selectPresentationForMessage(
@@ -232,7 +269,27 @@ test('presentation selector keeps bounded reads native and broad work in Code Mo
         { type: 'image', data: 'placeholder' },
       ]),
     ),
+    'native',
+  )
+  assert.equal(
+    selectPresentationForMessage(
+      humanMessage('搜索 /Users/example/repo/tests 中包含 compact 的测试并读取最相关文件。'),
+    ),
+    'native',
+  )
+  assert.equal(
+    selectPresentationForMessage(
+      humanMessage('统计整个仓库所有测试文件的断言数量，按目录汇总并排序。'),
+    ),
     'code',
+  )
+  assert.equal(
+    selectRouteForMessage(humanMessage('在线搜索官方 API 文档并给出引用。'))?.id,
+    'native-research',
+  )
+  assert.deepEqual(
+    selectRouteForMessage(humanMessage('修复项目并运行测试。'))?.allow,
+    ROUTE_TOOLSETS.codeCore,
   )
   assert.equal(
     selectPresentationForMessage({
@@ -298,15 +355,16 @@ test('runtime isolates presentation, restriction, and guidance per agent', () =>
 
   emitEvent(listeners, 'agent/inbox/inserted', {
     agent: second,
-    message: humanMessage(
-      '先读取 /Users/example/repo/package.json，再搜索目录并读取匹配文件。',
-    ),
+    message: humanMessage('修改 /Users/example/repo/package.json 并运行测试。'),
   })
   assert.deepEqual(presentationEvents.slice(-1), [
     { kind: 'set', id: 'second', mode: 'code' },
   ])
   assert.equal(guidanceByAgent.get('second'), PRESENTATION_GUIDANCE.code)
   assert.equal(guidanceByAgent.get('first'), PRESENTATION_GUIDANCE.native)
+  assert.deepEqual(restrictionEvents.slice(-1), [
+    { kind: 'set', id: 'second', filter: { allow: ROUTE_TOOLSETS.codeCore } },
+  ])
 
   const afterNative = presentationEvents.length
   emitEvent(listeners, 'agent/inbox/inserted', {
@@ -317,9 +375,7 @@ test('runtime isolates presentation, restriction, and guidance per agent', () =>
 
   emitEvent(listeners, 'agent/inbox/inserted', {
     agent: first,
-    message: humanMessage(
-      '先读取 /Users/example/repo/package.json，再搜索目录并读取匹配文件。',
-    ),
+    message: humanMessage('统计整个仓库所有测试文件的断言数量并按目录汇总。'),
   })
   assert.deepEqual(presentationEvents.slice(-2), [
     { kind: 'dispose', id: 'first', mode: 'native' },
@@ -327,8 +383,52 @@ test('runtime isolates presentation, restriction, and guidance per agent', () =>
   ])
   assert.equal(guidanceByAgent.get('first'), PRESENTATION_GUIDANCE.code)
   assert.equal(guidanceByAgent.get('second'), PRESENTATION_GUIDANCE.code)
-  assert.deepEqual(restrictionEvents.slice(-1), [
-    { kind: 'dispose', id: 'first', filter: { allow: ['read'] } },
+  assert.deepEqual(restrictionEvents.slice(-2), [
+    { kind: 'dispose', id: 'first', filter: { allow: ROUTE_TOOLSETS.nativeRead } },
+    { kind: 'set', id: 'first', filter: { allow: ROUTE_TOOLSETS.codeCore } },
+  ])
+})
+
+test('runtime refreshes a same-presentation route when its capability set changes', () => {
+  const { listeners, presentationEvents, restrictionEvents } = makeRuntimeHarness()
+  const agent = {
+    ctx: {
+      tools: {
+        presentAs(mode) {
+          presentationEvents.push({ kind: 'set', mode })
+          return () => presentationEvents.push({ kind: 'dispose', mode })
+        },
+        restrict(filter) {
+          restrictionEvents.push({ kind: 'set', filter })
+          return () => restrictionEvents.push({ kind: 'dispose', filter })
+        },
+      },
+      systemPrompt: {
+        section() {
+          return () => {}
+        },
+      },
+    },
+  }
+
+  emitEvent(listeners, 'agent/inbox/inserted', {
+    agent,
+    message: humanMessage('只读取 /Users/example/repo/package.json 并报告 name。'),
+  })
+  emitEvent(listeners, 'agent/inbox/inserted', {
+    agent,
+    message: humanMessage('搜索仓库中包含 compact 的文件并读取最相关结果。'),
+  })
+
+  assert.deepEqual(presentationEvents, [
+    { kind: 'set', mode: 'native' },
+    { kind: 'dispose', mode: 'native' },
+    { kind: 'set', mode: 'native' },
+  ])
+  assert.deepEqual(restrictionEvents, [
+    { kind: 'set', filter: { allow: ROUTE_TOOLSETS.nativeRead } },
+    { kind: 'dispose', filter: { allow: ROUTE_TOOLSETS.nativeRead } },
+    { kind: 'set', filter: { allow: ROUTE_TOOLSETS.nativeSearch } },
   ])
 })
 
@@ -353,7 +453,7 @@ test('classifies real Code Mode sub-tools by discovery, mutation, and verificati
     'mutation-verification',
   )
   assert.equal(
-    classifyCall('bash', { command: 'node --check controller/runtime-v12.mjs', workdir: '/repo' }),
+    classifyCall('bash', { command: 'node --check controller/runtime-v13.mjs', workdir: '/repo' }),
     'verification',
   )
   assert.equal(classifyCall('bash', { command: 'git status --short', workdir: '/repo' }), 'discovery')
@@ -711,13 +811,13 @@ test('tools/result covers bypassed post-execute failures without double counting
   assert.deepEqual(state.evidenceLedger.map((entry) => entry.name), ['read', 'grep'])
 })
 
-test('installers retain codex-mode default and copy the complete selected hybrid preset', () => {
+test('installers retain codex-mode default and support all three complete presets', () => {
   const shellInstaller = readFileSync(join(repository, 'install.sh'), 'utf8')
   const powershellInstaller = readFileSync(join(repository, 'install.ps1'), 'utf8')
   assert.match(shellInstaller, /PRESET_ID="codex-mode"/)
-  assert.match(shellInstaller, /--preset <codex-mode\|codex-ptc-mode>/)
+  assert.match(shellInstaller, /--preset <codex-mode\|codex-ptc-mode\|codex-harness-mode>/)
   assert.match(shellInstaller, /cp -R -- "\$SRC\/\." "\$DEST\/"/)
-  assert.match(powershellInstaller, /\[ValidateSet\('codex-mode', 'codex-ptc-mode'\)\]/)
+  assert.match(powershellInstaller, /\[ValidateSet\('codex-mode', 'codex-ptc-mode', 'codex-harness-mode'\)\]/)
   assert.match(powershellInstaller, /\[string\]\$Preset = 'codex-mode'/)
   assert.match(powershellInstaller, /Get-ChildItem -LiteralPath \$src -Force/)
   assert.match(powershellInstaller, /while \(Test-Path -LiteralPath \$backup\)/)
@@ -784,10 +884,12 @@ test('installers retain codex-mode default and copy the complete selected hybrid
   }
 })
 
-test('pack script requires and archives both complete preset directories', () => {
+test('pack script requires and archives all complete preset directories', () => {
   const pack = readFileSync(join(repository, 'scripts', 'pack.sh'), 'utf8')
-  assert.match(pack, /for preset in codex-mode codex-ptc-mode/)
+  assert.match(pack, /for preset in codex-mode codex-ptc-mode codex-harness-mode/)
+  assert.match(pack, /cp -R -- "\$ROOT\/benchmarks" "\$STAGE\/benchmarks"/)
   assert.match(pack, /\$ROOT\/presets\/\$preset\/controller/)
   assert.match(pack, /cp -R -- "\$ROOT\/presets" "\$STAGE\/presets"/)
+  assert.match(pack, /cp -R -- "\$ROOT\/docs" "\$STAGE\/docs"/)
   assert.equal(statSync(controllerPath).isFile(), true)
 })

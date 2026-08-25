@@ -29,12 +29,12 @@ import {
   selectRouteForContext,
   selectRouteForMessage,
   selectCheckpoint,
-} from '../presets/codex-ptc-mode/controller/runtime-v14.mjs'
+} from '../presets/codex-ptc-mode/controller/runtime-v15.mjs'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
 const presetRoot = join(repository, 'presets', 'codex-ptc-mode')
 const compositionPath = join(presetRoot, 'agent.cordis.yml')
-const controllerPath = join(presetRoot, 'controller', 'runtime-v14.mjs')
+const controllerPath = join(presetRoot, 'controller', 'runtime-v15.mjs')
 
 const ok = (text = 'ok') => ({
   isError: false,
@@ -134,10 +134,10 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
   assert.match(metadata, /^name: Codex PTC 模式$/m)
   assert.match(
     metadata,
-    /^description: Codex 工程策略与连续任务能力保持，有界原生搜索\/读取结合任务级精简 Code Mode SDK、批量编排和提前上下文压缩。$/m,
+    /^description: Codex 工程策略与通用能力保底，明确只读任务走精简原生工具，未知或可执行任务保留 Code Mode SDK、批量编排和提前上下文压缩。$/m,
   )
   assert.match(metadata, /^order: 7$/m)
-  assert.match(composition, /name: '\.\/controller\/runtime-v14\.mjs'/)
+  assert.match(composition, /name: '\.\/controller\/runtime-v15\.mjs'/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-agent-tool-presentation/)
 
   for (const [key, value] of [
@@ -191,6 +191,7 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
 
 test('adaptive orchestration favors direct bounded work and reduced code pipelines', () => {
   const composition = readFileSync(compositionPath, 'utf8')
+  const controller = readFileSync(controllerPath, 'utf8')
   assert.doesNotMatch(composition, /Adaptive tool orchestration:/)
   assert.doesNotMatch(composition, /Tool discipline:/)
   assert.match(PRESENTATION_GUIDANCE.native, /bounded native direct-tool fast path/)
@@ -224,6 +225,8 @@ test('adaptive orchestration favors direct bounded work and reduced code pipelin
     composition,
     /An explicit deploy or publish request authorizes that named external write/,
   )
+  assert.match(composition, /Never infer that an unfamiliar domain/)
+  assert.doesNotMatch(controller, /Stripe|Salesforce|CRM|ERP|FooBar|AcmeDesk/)
 })
 
 test('route selector keeps small direct work native and chooses code for real reduction', () => {
@@ -379,6 +382,41 @@ test('context route keeps executable capability for terse workflow follow-ups', 
     { previousRoute, previousTurnState },
   )
   assert.equal(boundedRead?.mode, 'native')
+})
+
+test('capability-first routing handles unknown domains while preserving proven native fast paths', () => {
+  for (const text of [
+    '查一下 Stripe 今天的订单。',
+    '看看 Salesforce 里的客户。',
+    '从内部 CRM 系统获取当前库存。',
+    '从 FooBar 服务获取当前业务指标。',
+    '分析当前 ERP 库存并生成报表。',
+    '读取第三方系统里的支付记录。',
+    '完善内容架构并重组导航栏目。',
+    '配置这个内容服务的发布接口。',
+    'Fetch the latest AcmeDesk tickets.',
+    '处理 Zeta-42 的当前内容。',
+    '设计一套全新的信息架构。',
+    '为陌生领域完成接下来的工作。',
+  ]) {
+    assert.equal(selectRouteForMessage(humanMessage(text))?.mode, 'code', text)
+  }
+
+  for (const text of [
+    '搜索仓库里的订单处理代码。',
+    '查看代码里的客户数据获取逻辑。',
+    '搜索仓库里的测试环境配置文件并解释其数据源。',
+    '在线搜索 Salesforce API 文档并给出引用。',
+    '解释 CRM 数据模型的架构。',
+    '分析页面内容架构并提出建议。',
+    '只读取 /Users/example/repo/package.json 并报告 name。',
+    '为什么这个架构这么复杂？',
+    '请翻译下面这段文字。',
+    '给我一个提示词。',
+    '你好',
+  ]) {
+    assert.equal(selectRouteForMessage(humanMessage(text))?.mode, 'native', text)
+  }
 })
 
 test('runtime isolates presentation, restriction, and guidance per agent', () => {
@@ -591,7 +629,7 @@ test('classifies real Code Mode sub-tools by discovery, mutation, and verificati
     'mutation-verification',
   )
   assert.equal(
-    classifyCall('bash', { command: 'node --check controller/runtime-v14.mjs', workdir: '/repo' }),
+    classifyCall('bash', { command: 'node --check controller/runtime-v15.mjs', workdir: '/repo' }),
     'verification',
   )
   assert.equal(classifyCall('bash', { command: 'git status --short', workdir: '/repo' }), 'discovery')

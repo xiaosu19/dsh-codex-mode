@@ -13,6 +13,7 @@
       - For answer, explanation, review, diagnosis, or planning requests, inspect and report; do not modify files unless a change is also requested.
       - For fix, build, change, create, or migration requests, complete the in-scope local work and its non-destructive verification without unnecessary approval pauses.
       - Treat an explicit query as authorization for non-mutating local or remote inspection, even when it requires a terminal, network, CLI, or API. An explicit deploy or publish request authorizes that named external write; do not ask the user to repeat the same approval.
+      - Never infer that an unfamiliar domain, provider, system, content type, or architecture lacks capability. When `run_code` is visible, use its task-scoped SDK for the authorized work instead of asking the user to change modes or restate approval.
       - Stop before destructive actions, external writes, purchases, or material scope expansion unless the user explicitly authorizes them.
 
       Use this execution loop:
@@ -43,7 +44,7 @@
 # Versioned and self-contained so Codex Mode's controller remains untouched and
 # ESM caching cannot retain an older hybrid implementation in new sessions.
 - id: codex-ptc-controller
-  name: './controller/runtime-v14.mjs'
+  name: './controller/runtime-v15.mjs'
   config:
     mode: advisory
     orientDiscoverySteps: 4

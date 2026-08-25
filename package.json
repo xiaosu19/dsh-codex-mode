@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-mode",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Codex, adaptive Codex PTC, and DSH-native Codex Harness agent presets",
   "private": true,
   "type": "module",

@@ -1,4 +1,4 @@
-// Runtime controller v15 for Codex PTC Mode.
+// Runtime controller v16 for Codex PTC Mode.
 //
 // The controller selects a bounded native surface only when the prompt proves a
 // self-contained read, search, research, or direct-response fast path. Every
@@ -176,33 +176,65 @@ function absoluteFilePaths(text) {
   return [...new Set(matches.map((path) => path.replace(/[),;:，。；：]+$/g, '')))]
 }
 
-function positiveIntentText(text) {
+function maskQuotedContent(text) {
   return text
-    .replace(/(?:禁止|不要|不得|无需)[^。！？.!?]*(?:[。！？.!?]|$)/g, ' ')
-    .replace(/\b(?:do not|don't|must not|never)\b[^.!?]*(?:[.!?]|$)/gi, ' ')
+    .replace(/“[^”]*”|‘[^’]*’|「[^」]*」|『[^』]*』|`[^`]*`/gs, ' ')
+    .replace(/(["'])(?:\\.|(?!\1)[\s\S])*\1/g, ' ')
+}
+
+const NEGATED_CLAUSE = /^(?:(?:请|请你)\s*)?(?:禁止|不要|不得|无需|不用|别)(?:\s|$|[\u3400-\u9fff])|^(?:please\s+)?(?:do\s+not|don't|must\s+not|never|no\s+need\s+to|without)\b/i
+
+/**
+ * Build an intent-only view rather than treating every action word in the
+ * message as an instruction. Quoted text, translation payloads, and negated
+ * clauses are content or boundaries; positive clauses after "but/但是" remain
+ * actionable. This is intentionally domain-neutral.
+ */
+function positiveIntentText(text) {
+  let intent = maskQuotedContent(text)
+  const payloadBoundary = intent.search(/[：:]/)
+  if (
+    payloadBoundary >= 0 &&
+    DIRECT_RESPONSE_INTENT.test(intent.slice(0, payloadBoundary))
+  ) {
+    intent = intent.slice(0, payloadBoundary)
+  }
+
+  return intent
+    .replace(/(?:但是|但|而是|不过|然而)/g, '\n')
+    .replace(/\b(?:but|instead|however)\b/gi, '\n')
+    .split(/[，,；;。！？.!?\n]|(?:—+|--+)/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0 && !NEGATED_CLAUSE.test(clause))
+    .join(' ')
     .replace(/\bscripts\.test\b/gi, ' ')
     .replace(/\btest\s*=/gi, ' ')
 }
 
-const READ_INTENT = /(?:读取|查看|检查|提取|报告|分析|审查|比较|解释)|\b(?:read|inspect|extract|report|analy[sz]e|review|compare|explain)\b/i
+const READ_INTENT = /(?:读取|阅读|查看|看看|检查|提取|报告|分析|审查|比较|对比|解释|说明)|\b(?:read|inspect|extract|report|analy[sz]e|review|compare|explain|describe)\b/i
 const REPOSITORY_SEARCH_INTENT = /(?:搜索|查找|匹配|扫描)|\b(?:glob|grep|search|find|scan)\b|目录下|代码库|仓库|\brepositor(?:y|ies)\b/i
-const WEB_INTENT = /(?:联网|网页|网站|互联网|网上|在线搜索)|\b(?:web|internet|online)\s+(?:search|research)|https?:\/\//i
-const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|调整|优化|新增|添加|改进|改版|改造|重组|重排|搭建|完善|(?:扩展|集成|配置)(?:一下|好|完成|新的?|这个|该|系统|服务|环境|功能|账号|接口|模块|能力)|重新?(?:排版|设计|规划)|接入|落地|替换|更新|补充|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|redesign|rework|adjust|optimi[sz]e|integrate|configure|reorganize|restructure|extend|complete)\b/i
+const WEB_INTENT = /(?:联网|网页|网站|互联网|网上|在线搜索|官网|官方网站|官方(?:发布|版本|公告|说明)|附(?:上)?链接|给出(?:来源|出处|引用))|\b(?:web|internet|online)\s+(?:search|research)|\b(?:official\s+(?:site|release|documentation)|cite|citation|source\s+link)\b|https?:\/\//i
+const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|调整|优化|新增|添加|改进|改版|改造|重组|重排|搭建|完善|(?:^|请|帮我|替我|直接|需要|然后|并且|再)\s*(?:把|将)?\s*实现|实现(?:一下|一个|一套|这个|该|功能|接口|模块|能力|支持|需求|方案)|(?:扩展|集成|配置)(?:一下|好|完成|新的?|这个|该|系统|服务|环境|功能|账号|接口|模块|能力)|重新?(?:排版|设计|规划)|接入|落地|替换|更新|补充|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|redesign|rework|adjust|optimi[sz]e|integrate|configure|reorganize|restructure|extend|complete)\b/i
 const COMMAND_INTENT = /(?:运行|执行|构建|编译|启动|停止)|测试(?!环境|数据|账号|服务器|目录|文件|文件夹|套件|名称|并(?:读取|查看|分析|报告))|\b(?:run|execute|build|compile|lint|typecheck|start|stop)\b|\btest\b(?!\s+(?:environment|env|data|account|server|file|directory|folder|fixture|suite|name)\b)/i
-const EXPLICIT_CODE_INTENT = /\b(?:run_code|code\s*mode|programmatic\s+tool\s+calling|ptc)\b|程序化工具调用|代码模式/i
+const EXPLICIT_CODE_INTENT = /(?:使用|切换|进入|启用|强制|通过|生成)[^，,。.!?]{0,16}(?:run_code|PTC|程序化工具调用|代码模式)|\b(?:use|switch\s+to|enter|enable|force|through|generate)[^,.!?]{0,20}(?:run_code|code\s*mode|programmatic\s+tool\s+calling|ptc)\b/i
 const FANOUT_INTENT = /(?:全部|所有|每个|逐个|全仓|整个仓库|递归|批量|大量)|\b(?:all|every|each|recursive(?:ly)?|repository-wide|repo-wide|batch|bulk|many)\b/i
 const REDUCTION_INTENT = /(?:统计|计数|汇总|聚合|去重|排序|排名|筛选|过滤|合并|比较|对比|提取|交叉验证)|\b(?:count|aggregate|summari[sz]e|deduplicat|sort|rank|filter|join|compare|extract|cross-check)\w*\b/i
 const EXTERNAL_EXECUTION_ACTION = /(?:查询|查(?:一下|下)?|获取|拉取|读取|调用|连接|请求|同步|上传|下载|导出|列出|枚举|看看|查看|检查|验证|部署|发布|切换|重启|启动|停止|执行|运行)|\b(?:query|look\s*up|fetch|get|read|call|connect|request|sync|upload|download|export|list|inspect|check|verify|deploy|publish|switch|restart|start|stop|run|execute)\b/i
+const CURRENT_STATE_CONTEXT = /(?:当前|现在|实际|实时|现有|运行中|测试环境|生产环境)|\b(?:current|currently|actual|live|existing|running|test\s+environment|production)\b/i
 const DATA_PROCESSING_ACTION = /(?:分析|统计|汇总|聚合|筛选|过滤|对比|核对|生成报表)|\b(?:analy[sz]e|count|aggregate|summari[sz]e|filter|compare|reconcile)\b/i
 const LOCAL_ARTIFACT_CONTEXT = /(?:仓库|代码库|源码|代码|本地文件|配置文件|目录|文档|说明文件)|\b(?:repo(?:sitory)?|source\s*code|codebase|local\s+files?|config(?:uration)?\s+files?|directory|docs?|readme|package\.json)\b/i
-const CONCEPTUAL_SUBJECT = /(?:架构|设计|原理|逻辑|定义|规范|文档|教程|语法|概念|含义|实现方式)|\b(?:architecture|design|principles?|logic|definition|specification|docs?|tutorial|syntax|concept|meaning|how\s+it\s+works)\b/i
+const CONCEPTUAL_SUBJECT = /(?:架构|设计|原理|逻辑|策略|定义|规范|文档|教程|语法|概念|含义|实现方式|方案|层级|布局|界面|内容|结构|差异|优缺点)|\b(?:architecture|designs?|principles?|logic|strategy|definition|specification|docs?|tutorial|syntax|concept|meaning|layouts?|interfaces?|content|structure|differences?|options?|alternatives?|pros?\s+and\s+cons?|how\s+it\s+works)\b/i
 const CREDENTIAL_OR_REMOTE_CLI = /(?:AK\s*\/?\s*SK|访问密钥|凭据文件)|\b(?:access\s*key|secret\s*key|credentials?|aws\s+cli|boto3|kubectl|terraform|ansible|ssh|scp)\b/i
 const REMEDIATION_INTENT = /(?:报错|错误|失败|异常|有问题|不正常|不工作|没(?:有)?生效|无效|卡住|无法|不能)|\b(?:error|exception|validationexception|traceback|fail(?:ed|ure)?|broken|not\s+working)\b/i
 const CONTINUATION_INTENT = /^(?:那?就?)?(?:继续|接着|开始(?:吧)?|执行(?:吧)?|照(?:你|上面|这个)?.*做|按(?:你|上面|这个)?.*做|就这么做|可以|好的?|没问题|ok|go\s+ahead|proceed|do\s+it)[。.!！\s]*$/i
 const EXPLANATION_ONLY_INTENT = /(?:只|仅)(?:需要?|要)?(?:解释|说明|总结|介绍)|\b(?:only|just)\s+(?:explain|describe|summari[sz]e)\b/i
-const LOCAL_READ_ONLY_INTENT = /(?:只|仅)(?:需要?|要)?(?:读取|查看|检查|搜索|查找)|\b(?:only|just)\s+(?:read|inspect|search)\b/i
-const KNOWLEDGE_INTENT = /(?:为什么|是什么|怎么回事|有何|区别|优缺点|解释|说明|总结|报告|分析|审查|比较|介绍)(?:一下|下)?|\b(?:why|what\s+is|difference|pros?\s+and\s+cons?|explain|describe|summari[sz]e|report|analy[sz]e|review|compare)\b/i
-const DIRECT_RESPONSE_INTENT = /(?:翻译|润色|改写|起草|草拟|头脑风暴|文案|提示词|邮件|故事|诗歌?|建议|方案)|\b(?:translate|polish|rewrite|draft|brainstorm|copywriting|prompt|email|story|poem|suggestions?|proposal)\b/i
+const LOCAL_READ_ONLY_INTENT = /(?:只|仅)(?:(?:需要?|要|做|进行))?(?:本地)?(?:(?:源码|源代码|代码))?(?:读取|阅读|查看|检查|搜索|查找|分析|审查|评审|比较|对比)|\b(?:only|just)\s+(?:read|inspect|search|analy[sz]e|review|compare)\b/i
+const KNOWLEDGE_INTENT = /(?:为什么|是什么|怎么回事|有哪些|有何|区别|优缺点|解释|说明|总结|报告|分析|审查|比较|介绍|告诉我|列出)(?:一下|下)?|\b(?:why|what\s+(?:is|are)|how\s+(?:does|do|is|are)[^?.!]{0,48}\bwork|difference|pros?\s+and\s+cons?|explain|describe|summari[sz]e|report|analy[sz]e|review|compare|tell\s+me)\b/i
+const DIRECT_RESPONSE_INTENT = /(?:翻译|润色|改写|起草|草拟|头脑风暴|文案|提示词|邮件|通知|公告|故事|诗歌?|建议|方案)|\b(?:translate|polish|rewrite|draft|brainstorm|copywriting|prompt|email|announcement|notice|story|poem|suggestions?|proposal)\b/i
+const DIRECT_RESPONSE_REQUEST = /(?:翻译|润色|改写|起草|草拟|头脑风暴|写(?:一份|一封|一个)?(?:文案|邮件|通知|公告|故事|诗歌?)|给我[^，,。.!?]{0,32}(?:提示词|建议|方案))|\b(?:translate|polish|rewrite|draft|brainstorm|write\s+(?:an?\s+)?(?:email|announcement|notice|story|poem|proposal)|give\s+me[^,.!?]{0,32}(?:prompt|suggestions?|proposal))\b/i
+const PROCEDURAL_KNOWLEDGE_INTENT = /(?:如何|怎样|怎么(?:样)?|方法|步骤|流程|指南|教程|用法)|\b(?:how\s+to|steps?|guide|instructions?|procedure|process)\b/i
+const PROCEDURAL_QUESTION = /(?:如何|怎样|怎么(?:样)?)|\bhow\s+to\b/i
+const DIRECT_ACTION_REQUEST = /(?:^|[，,；;。.!?]\s*|(?:然后|并且|再)\s*)(?:(?:请|帮我|替我|直接|立即|现在|马上|开始|继续|务必)\s*)?(?:把|将)?\s*(?:修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|调整|优化|新增|添加|改进|搭建|替换|更新|运行|执行|构建|启动|停止)|(?:^|[,;.!?]\s*|(?:and\s+then)\s*)(?:(?:please|directly|now|go\s+ahead(?:\s+and)?)\s*)?(?:edit|fix|write|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|run|execute|build|start|stop)\b/i
 const CONVERSATION_INTENT = /^(?:你好|您好|嗨|谢谢|多谢|hi|hello|hey|thanks?)[。.!！\s]*$/i
 
 function route(id, mode, allow, reason) {
@@ -256,15 +288,35 @@ export function selectRouteForMessage(message) {
   const rawCommand = COMMAND_INTENT.test(intent)
   const rawCodeRequest = EXPLICIT_CODE_INTENT.test(intent)
   const rawReduction = FANOUT_INTENT.test(intent) && REDUCTION_INTENT.test(intent)
+  const proceduralInformationOnly =
+    PROCEDURAL_KNOWLEDGE_INTENT.test(intent) &&
+    (PROCEDURAL_QUESTION.test(intent) ||
+      KNOWLEDGE_INTENT.test(intent) ||
+      READ_INTENT.test(intent)) &&
+    !DIRECT_ACTION_REQUEST.test(intent) &&
+    !(CURRENT_STATE_CONTEXT.test(intent) && EXTERNAL_EXECUTION_ACTION.test(intent))
+  const mediaInformationOnly =
+    containsImage &&
+    intent.length > 0 &&
+    (READ_INTENT.test(intent) || KNOWLEDGE_INTENT.test(intent)) &&
+    !DIRECT_ACTION_REQUEST.test(intent)
+  const directResponseOnly =
+    DIRECT_RESPONSE_REQUEST.test(intent) && !localEvidence
   const explicitInformationOnly =
     EXPLANATION_ONLY_INTENT.test(intent) ||
+    proceduralInformationOnly ||
+    mediaInformationOnly ||
+    directResponseOnly ||
     (LOCAL_READ_ONLY_INTENT.test(intent) &&
       localEvidence)
   const changesState = rawStateChange && !explicitInformationOnly
   const runsCommands = rawCommand && !explicitInformationOnly
   const requestsCode = rawCodeRequest && !explicitInformationOnly
   const predictsReduction = rawReduction && !explicitInformationOnly
-  const needsRemediation = REMEDIATION_INTENT.test(intent) && !explicitInformationOnly
+  const conceptualInspection =
+    directRead && localEvidence && CONCEPTUAL_SUBJECT.test(intent)
+  const needsRemediation =
+    REMEDIATION_INTENT.test(intent) && !explicitInformationOnly && !conceptualInspection
   const needsCredentialExecution =
     CREDENTIAL_OR_REMOTE_CLI.test(intent) && !EXPLANATION_ONLY_INTENT.test(intent)
 
@@ -306,14 +358,6 @@ export function selectRouteForMessage(message) {
     )
   }
 
-  if (!explicitInformationOnly && needsExecutableOperation(intent)) {
-    return codeRoute(
-      usesWeb,
-      containsImage,
-      'task may require executable capability; no domain-name allowlist is used',
-    )
-  }
-
   if (usesWeb) {
     return route(
       'native-research',
@@ -323,9 +367,17 @@ export function selectRouteForMessage(message) {
     )
   }
 
+  if (!explicitInformationOnly && needsExecutableOperation(intent)) {
+    return codeRoute(
+      usesWeb,
+      containsImage,
+      'task may require executable capability; no domain-name allowlist is used',
+    )
+  }
+
   if (
     explicitInformationOnly ||
-    KNOWLEDGE_INTENT.test(intent) ||
+    (KNOWLEDGE_INTENT.test(intent) && !/\bdo\s+what\s+is\b/i.test(intent)) ||
     (DIRECT_RESPONSE_INTENT.test(intent) && !localEvidence) ||
     CONVERSATION_INTENT.test(intent)
   ) {

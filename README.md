@@ -72,6 +72,10 @@ Codex Harness 模式面向“在 DSH 中使用 Codex Agent 工作方式，但继
 
 v15 不再根据 AWS、CRM、订单或其他领域名判断能力，而把原生模式限制为可证明的直接回答、本地只读、仓库搜索和 Web 调研快路径；其余未知或含糊任务以 Code Mode 作为能力保底。30/30 项确定性测试覆盖未知标识、未知领域、内容架构、跨业务动作及原生反例。`gpt-5.6-sol Low` 三回合无副作用实测依次得到 `run_code → read → run_code`，对应未知领域任务、明确只解释和未知内容架构设计，工具调用均为 0。完整证据见 [Codex PTC v15 通用 Agent 能力回归报告](docs/regression-v15-2026-08-25.md)。
 
+## v16 通用意图作用域
+
+v16 在能力优先路由上加入通用意图作用域：否定动作不会覆盖后续正向要求，引号与翻译正文中的操作词按内容处理，“如何安装”等过程说明与“立即安装”分开，纯图片分析和根据图片修改也使用不同工具面。旧鲁棒性集从 31/38 提升到 38/38；68 条新样本首轮 65/68，修复三个通用表达缺口后为 68/68，首轮失败仍保留在报告中。`gpt-5.6-sol Low` 的真实 DSH 新会话分别将“只解释”挂载为 `read`、将“直接修复”挂载为 `run_code`；完整 Agent 验收还真实读取了未知标记、查询了 Git 分支，并把失败项目从 1/3 修到公开与隐藏检查全部通过。完整证据见 [Codex PTC v16 意图识别回归报告](docs/regression-v16-2026-08-25.md)。
+
 ## 这是什么
 
 DSH 的一个 agent preset 就是一个目录。本仓库的三个 preset 都包含组合与界面元数据；两个 DSH 原生模式另带独立控制器，Harness 模式把 Codex 工具运行层交给固定版本的兼容插件：
@@ -81,7 +85,7 @@ DSH 的一个 agent preset 就是一个目录。本仓库的三个 preset 都包
 | `agent.cordis.yml` | 组合定义：persona 提示词 + 挂载哪些工具行（必需） |
 | `preset.yml` | 界面上显示的名字、描述、排序（可选） |
 | `presets/codex-mode/controller/runtime-v6.mjs` | Codex 模式的阶段/证据控制器 |
-| `presets/codex-ptc-mode/controller/runtime-v15.mjs` | Codex PTC 的阶段/证据控制器、能力优先路由、连续任务保持和任务级工具面裁剪 |
+| `presets/codex-ptc-mode/controller/runtime-v16.mjs` | Codex PTC 的阶段/证据控制器、意图作用域、能力优先路由、连续任务保持和任务级工具面裁剪 |
 | `presets/codex-harness-mode/agent.cordis.yml` | Codex 工具契约到 DSH provider、Shell、文件、压缩和 Skills 的组合边界 |
 
 目录名就是预设 id。DSH 启动时扫描 `$DSH_HOME/.agent-presets/`（默认 `~/.dsh/.agent-presets/`），发现的预设会出现在会话的模式选择器里。

@@ -29,12 +29,12 @@ import {
   selectRouteForContext,
   selectRouteForMessage,
   selectCheckpoint,
-} from '../presets/codex-ptc-mode/controller/runtime-v15.mjs'
+} from '../presets/codex-ptc-mode/controller/runtime-v16.mjs'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
 const presetRoot = join(repository, 'presets', 'codex-ptc-mode')
 const compositionPath = join(presetRoot, 'agent.cordis.yml')
-const controllerPath = join(presetRoot, 'controller', 'runtime-v15.mjs')
+const controllerPath = join(presetRoot, 'controller', 'runtime-v16.mjs')
 
 const ok = (text = 'ok') => ({
   isError: false,
@@ -137,7 +137,7 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
     /^description: Codex 工程策略与通用能力保底，明确只读任务走精简原生工具，未知或可执行任务保留 Code Mode SDK、批量编排和提前上下文压缩。$/m,
   )
   assert.match(metadata, /^order: 7$/m)
-  assert.match(composition, /name: '\.\/controller\/runtime-v15\.mjs'/)
+  assert.match(composition, /name: '\.\/controller\/runtime-v16\.mjs'/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-agent-tool-presentation/)
 
   for (const [key, value] of [
@@ -417,6 +417,65 @@ test('capability-first routing handles unknown domains while preserving proven n
   ]) {
     assert.equal(selectRouteForMessage(humanMessage(text))?.mode, 'native', text)
   }
+})
+
+test('intent routing separates requested work from quoted, negated, and informational actions', () => {
+  const nativeCases = [
+    '为什么标准模式有时比 PTC 快？',
+    '把这句话翻译成英文：今天开始灰度发布。',
+    '阅读仓库 README，告诉我如何安装。',
+    '看看代码里的错误处理逻辑。',
+    '查找代码库里的支付适配器实现。',
+    '联网查询当前汇率并给出处。',
+    '查一下官网最新版本说明并附链接。',
+    '不要部署，只比较两个方案。',
+    '不要执行任何操作，只翻译下面的文字。',
+    '不要修改文件，只解释为什么会失败。',
+    '在仓库中搜索字符串“run tests”，不要执行它。',
+    'Do not deploy; only explain the release process.',
+    '只做本地代码审查，不修改也不运行。',
+    '起草一封发布完成通知。',
+    'Write an email announcing the migration.',
+    '给我一个用于生成数据导出说明的提示词。',
+    '仅做本地源码审查，不进行修改。',
+    '查看代码里的重试失败处理策略。',
+  ]
+  for (const text of nativeCases) {
+    assert.equal(selectRouteForMessage(humanMessage(text))?.mode, 'native', text)
+  }
+
+  for (const [text, blocks] of [
+    ['分析这张产品截图的内容层级。', [{ type: 'image', data: 'placeholder' }]],
+    ['Compare the two attached designs.', [{ type: 'image', data: 'placeholder' }]],
+  ]) {
+    assert.equal(
+      selectRouteForMessage(humanMessage(text, [{ type: 'text', text }, ...blocks]))?.mode,
+      'native',
+      text,
+    )
+  }
+
+  const codeCases = [
+    'Do what is needed for Quasar-17.',
+    '不要只解释，请直接修复并验证。',
+    '禁止部署生产环境，但可以修复本地代码。',
+    '先告诉我如何安装，然后直接安装并验证。',
+    '使用 PTC 的 run_code 完成这个迁移。',
+  ]
+  for (const text of codeCases) {
+    assert.equal(selectRouteForMessage(humanMessage(text))?.mode, 'code', text)
+  }
+
+  const mediaChange = '根据截图修改页面布局并测试。'
+  assert.equal(
+    selectRouteForMessage(
+      humanMessage(mediaChange, [
+        { type: 'text', text: mediaChange },
+        { type: 'image', data: 'placeholder' },
+      ]),
+    )?.mode,
+    'code',
+  )
 })
 
 test('runtime isolates presentation, restriction, and guidance per agent', () => {

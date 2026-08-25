@@ -44,7 +44,7 @@
 # Versioned and self-contained so Codex Mode's controller remains untouched and
 # ESM caching cannot retain an older hybrid implementation in new sessions.
 - id: codex-ptc-controller
-  name: './controller/runtime-v15.mjs'
+  name: './controller/runtime-v16.mjs'
   config:
     mode: advisory
     orientDiscoverySteps: 4

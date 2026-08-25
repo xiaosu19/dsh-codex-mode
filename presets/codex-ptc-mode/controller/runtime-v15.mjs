@@ -1,9 +1,9 @@
-// Runtime controller v14 for Codex PTC Mode.
+// Runtime controller v15 for Codex PTC Mode.
 //
-// The controller selects a bounded native surface for small direct reads,
-// searches, and citation-bearing research, and a task-scoped Code Mode SDK only
-// when deterministic orchestration or intermediate-result reduction can pay for
-// generating a program.
+// The controller selects a bounded native surface only when the prompt proves a
+// self-contained read, search, research, or direct-response fast path. Every
+// ambiguous task keeps a task-scoped Code Mode SDK, so unfamiliar domains never
+// lose executable capability merely because their names are absent from a list.
 // Code Mode's SDK bindings re-enter DSH's public tool pipeline as ordinary
 // sub-dispatches. The controller records authoritative `tools/result` outcomes,
 // excludes the outer `run_code` transport from evidence counts, and remains
@@ -187,17 +187,23 @@ function positiveIntentText(text) {
 const READ_INTENT = /(?:读取|查看|检查|提取|报告|分析|审查|比较|解释)|\b(?:read|inspect|extract|report|analy[sz]e|review|compare|explain)\b/i
 const REPOSITORY_SEARCH_INTENT = /(?:搜索|查找|匹配|扫描)|\b(?:glob|grep|search|find|scan)\b|目录下|代码库|仓库|\brepositor(?:y|ies)\b/i
 const WEB_INTENT = /(?:联网|网页|网站|互联网|网上|在线搜索)|\b(?:web|internet|online)\s+(?:search|research)|https?:\/\//i
-const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|调整|优化|新增|添加|改进|改版|重新?(?:排版|设计)|接入|落地|替换|更新|补充|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|redesign|rework|adjust|optimi[sz]e|integrate)\b/i
+const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|调整|优化|新增|添加|改进|改版|改造|重组|重排|搭建|完善|(?:扩展|集成|配置)(?:一下|好|完成|新的?|这个|该|系统|服务|环境|功能|账号|接口|模块|能力)|重新?(?:排版|设计|规划)|接入|落地|替换|更新|补充|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|redesign|rework|adjust|optimi[sz]e|integrate|configure|reorganize|restructure|extend|complete)\b/i
 const COMMAND_INTENT = /(?:运行|执行|构建|编译|启动|停止)|测试(?!环境|数据|账号|服务器|目录|文件|文件夹|套件|名称|并(?:读取|查看|分析|报告))|\b(?:run|execute|build|compile|lint|typecheck|start|stop)\b|\btest\b(?!\s+(?:environment|env|data|account|server|file|directory|folder|fixture|suite|name)\b)/i
 const EXPLICIT_CODE_INTENT = /\b(?:run_code|code\s*mode|programmatic\s+tool\s+calling|ptc)\b|程序化工具调用|代码模式/i
 const FANOUT_INTENT = /(?:全部|所有|每个|逐个|全仓|整个仓库|递归|批量|大量)|\b(?:all|every|each|recursive(?:ly)?|repository-wide|repo-wide|batch|bulk|many)\b/i
 const REDUCTION_INTENT = /(?:统计|计数|汇总|聚合|去重|排序|排名|筛选|过滤|合并|比较|对比|提取|交叉验证)|\b(?:count|aggregate|summari[sz]e|deduplicat|sort|rank|filter|join|compare|extract|cross-check)\w*\b/i
-const EXTERNAL_EXECUTION_TARGET = /(?:AWS|Azure|GCP|阿里云|腾讯云|云账号|云资源|远程(?:主机|服务器|环境)?|服务器|实例|集群|容器|数据库|测试环境|生产环境|线上环境|域名|端口)|\b(?:aws|ec2|ssm|iam|cost\s*explorer|s3|rds|lambda|azure|gcp|remote\s+(?:host|server|environment)|server|instance|cluster|database|staging|production)\b/i
-const EXTERNAL_EXECUTION_ACTION = /(?:查询|获取|拉取|调用|连接|请求|同步|上传|下载|列出|枚举|看看|查看|检查|验证|部署|发布|切换|重启|启动|停止|执行|运行)|\b(?:query|fetch|get|call|connect|request|sync|upload|download|list|inspect|check|verify|deploy|publish|switch|restart|start|stop|run|execute)\b/i
+const EXTERNAL_EXECUTION_ACTION = /(?:查询|查(?:一下|下)?|获取|拉取|读取|调用|连接|请求|同步|上传|下载|导出|列出|枚举|看看|查看|检查|验证|部署|发布|切换|重启|启动|停止|执行|运行)|\b(?:query|look\s*up|fetch|get|read|call|connect|request|sync|upload|download|export|list|inspect|check|verify|deploy|publish|switch|restart|start|stop|run|execute)\b/i
+const DATA_PROCESSING_ACTION = /(?:分析|统计|汇总|聚合|筛选|过滤|对比|核对|生成报表)|\b(?:analy[sz]e|count|aggregate|summari[sz]e|filter|compare|reconcile)\b/i
+const LOCAL_ARTIFACT_CONTEXT = /(?:仓库|代码库|源码|代码|本地文件|配置文件|目录|文档|说明文件)|\b(?:repo(?:sitory)?|source\s*code|codebase|local\s+files?|config(?:uration)?\s+files?|directory|docs?|readme|package\.json)\b/i
+const CONCEPTUAL_SUBJECT = /(?:架构|设计|原理|逻辑|定义|规范|文档|教程|语法|概念|含义|实现方式)|\b(?:architecture|design|principles?|logic|definition|specification|docs?|tutorial|syntax|concept|meaning|how\s+it\s+works)\b/i
 const CREDENTIAL_OR_REMOTE_CLI = /(?:AK\s*\/?\s*SK|访问密钥|凭据文件)|\b(?:access\s*key|secret\s*key|credentials?|aws\s+cli|boto3|kubectl|terraform|ansible|ssh|scp)\b/i
 const REMEDIATION_INTENT = /(?:报错|错误|失败|异常|有问题|不正常|不工作|没(?:有)?生效|无效|卡住|无法|不能)|\b(?:error|exception|validationexception|traceback|fail(?:ed|ure)?|broken|not\s+working)\b/i
 const CONTINUATION_INTENT = /^(?:那?就?)?(?:继续|接着|开始(?:吧)?|执行(?:吧)?|照(?:你|上面|这个)?.*做|按(?:你|上面|这个)?.*做|就这么做|可以|好的?|没问题|ok|go\s+ahead|proceed|do\s+it)[。.!！\s]*$/i
-const STANDALONE_INFORMATION_INTENT = /(?:只|仅).*(?:读取|查看|检查|提取|报告|分析|审查|比较|解释|搜索|查找)|(?:解释|说明|总结|报告|分析|审查|比较)(?:一下|下)?|\b(?:only\s+(?:read|inspect|explain|search)|explain|summari[sz]e|report|review|compare)\b/i
+const EXPLANATION_ONLY_INTENT = /(?:只|仅)(?:需要?|要)?(?:解释|说明|总结|介绍)|\b(?:only|just)\s+(?:explain|describe|summari[sz]e)\b/i
+const LOCAL_READ_ONLY_INTENT = /(?:只|仅)(?:需要?|要)?(?:读取|查看|检查|搜索|查找)|\b(?:only|just)\s+(?:read|inspect|search)\b/i
+const KNOWLEDGE_INTENT = /(?:为什么|是什么|怎么回事|有何|区别|优缺点|解释|说明|总结|报告|分析|审查|比较|介绍)(?:一下|下)?|\b(?:why|what\s+is|difference|pros?\s+and\s+cons?|explain|describe|summari[sz]e|report|analy[sz]e|review|compare)\b/i
+const DIRECT_RESPONSE_INTENT = /(?:翻译|润色|改写|起草|草拟|头脑风暴|文案|提示词|邮件|故事|诗歌?|建议|方案)|\b(?:translate|polish|rewrite|draft|brainstorm|copywriting|prompt|email|story|poem|suggestions?|proposal)\b/i
+const CONVERSATION_INTENT = /^(?:你好|您好|嗨|谢谢|多谢|hi|hello|hey|thanks?)[。.!！\s]*$/i
 
 function route(id, mode, allow, reason) {
   return Object.freeze({
@@ -223,49 +229,88 @@ function codeRoute(usesWeb, containsImage, reason) {
   )
 }
 
+function needsExecutableOperation(intent) {
+  if (CREDENTIAL_OR_REMOTE_CLI.test(intent)) return true
+  if (EXTERNAL_EXECUTION_ACTION.test(intent)) return true
+  return DATA_PROCESSING_ACTION.test(intent) && !CONCEPTUAL_SUBJECT.test(intent)
+}
+
 /**
  * Select the smallest useful model-visible surface for a newly inserted human
  * message. The decision is based on reusable task-shape features rather than
- * benchmark paths or expected answers. Multiple/dependent calls alone do not
- * justify Code Mode: a program is selected for mutation/command pipelines or
- * when fan-out plus reduction predicts a meaningfully smaller final result.
+ * benchmark paths, provider names, business nouns, or expected answers. Native
+ * mode is a proven fast path; Code Mode is the capability-preserving fallback
+ * for mutations, commands, actual operations, large reductions, and ambiguity.
  */
 export function selectRouteForMessage(message) {
   const text = userText(message)
   if (text === undefined) return undefined
   const containsImage = message.content.some((block) => block?.type === 'image')
   const intent = positiveIntentText(text)
+  const absolutePaths = absoluteFilePaths(text)
   const usesWeb = WEB_INTENT.test(intent)
-  const standaloneInformation = STANDALONE_INFORMATION_INTENT.test(intent)
-  const changesState = STATE_CHANGE_INTENT.test(intent) && !standaloneInformation
-  const runsCommands = COMMAND_INTENT.test(intent) && !standaloneInformation
-  const requestsCode = EXPLICIT_CODE_INTENT.test(intent) && !standaloneInformation
-  const predictsReduction =
-    FANOUT_INTENT.test(intent) && REDUCTION_INTENT.test(intent) && !standaloneInformation
-  const needsExternalExecution =
-    !standaloneInformation &&
-    (CREDENTIAL_OR_REMOTE_CLI.test(intent) ||
-      (EXTERNAL_EXECUTION_TARGET.test(intent) && EXTERNAL_EXECUTION_ACTION.test(intent)))
-  const needsRemediation = REMEDIATION_INTENT.test(intent) && !standaloneInformation
+  const repositorySearch = REPOSITORY_SEARCH_INTENT.test(intent)
+  const directRead = READ_INTENT.test(intent) || absolutePaths.length > 0
+  const localEvidence = absolutePaths.length > 0 || LOCAL_ARTIFACT_CONTEXT.test(intent)
+  const rawStateChange = STATE_CHANGE_INTENT.test(intent)
+  const rawCommand = COMMAND_INTENT.test(intent)
+  const rawCodeRequest = EXPLICIT_CODE_INTENT.test(intent)
+  const rawReduction = FANOUT_INTENT.test(intent) && REDUCTION_INTENT.test(intent)
+  const explicitInformationOnly =
+    EXPLANATION_ONLY_INTENT.test(intent) ||
+    (LOCAL_READ_ONLY_INTENT.test(intent) &&
+      localEvidence)
+  const changesState = rawStateChange && !explicitInformationOnly
+  const runsCommands = rawCommand && !explicitInformationOnly
+  const requestsCode = rawCodeRequest && !explicitInformationOnly
+  const predictsReduction = rawReduction && !explicitInformationOnly
+  const needsRemediation = REMEDIATION_INTENT.test(intent) && !explicitInformationOnly
+  const needsCredentialExecution =
+    CREDENTIAL_OR_REMOTE_CLI.test(intent) && !EXPLANATION_ONLY_INTENT.test(intent)
 
   if (
     changesState ||
     runsCommands ||
     requestsCode ||
     predictsReduction ||
-    needsExternalExecution ||
-    needsRemediation
+    needsRemediation ||
+    needsCredentialExecution
   ) {
     return codeRoute(
       usesWeb,
       containsImage,
       changesState || runsCommands
         ? 'authorized deterministic work pipeline'
-        : needsExternalExecution
-          ? 'external CLI, API, or runtime query requires executable capability'
+        : needsCredentialExecution
+          ? 'credential or remote CLI context requires a secret-safe executable surface'
           : needsRemediation
-            ? 'reported failure requires executable diagnosis or remediation'
-            : 'fan-out with intermediate-result reduction',
+          ? 'reported failure requires executable diagnosis or remediation'
+          : 'fan-out with intermediate-result reduction',
+    )
+  }
+
+  if (!usesWeb && localEvidence && (repositorySearch || directRead)) {
+    if (repositorySearch) {
+      return route(
+        'native-search',
+        'native',
+        withMedia(ROUTE_TOOLSETS.nativeSearch, containsImage),
+        'explicitly local bounded repository discovery',
+      )
+    }
+    return route(
+      containsImage ? 'native-media' : 'native-read',
+      'native',
+      containsImage ? ROUTE_TOOLSETS.nativeMedia : ROUTE_TOOLSETS.nativeRead,
+      'explicitly local small direct read',
+    )
+  }
+
+  if (!explicitInformationOnly && needsExecutableOperation(intent)) {
+    return codeRoute(
+      usesWeb,
+      containsImage,
+      'task may require executable capability; no domain-name allowlist is used',
     )
   }
 
@@ -278,24 +323,24 @@ export function selectRouteForMessage(message) {
     )
   }
 
-  const absolutePaths = absoluteFilePaths(text)
-  const repositorySearch = REPOSITORY_SEARCH_INTENT.test(intent)
-  const directRead = READ_INTENT.test(intent) || absolutePaths.length > 0
-
-  if (repositorySearch || !directRead) {
+  if (
+    explicitInformationOnly ||
+    KNOWLEDGE_INTENT.test(intent) ||
+    (DIRECT_RESPONSE_INTENT.test(intent) && !localEvidence) ||
+    CONVERSATION_INTENT.test(intent)
+  ) {
     return route(
-      'native-search',
+      containsImage ? 'native-media' : 'native-answer',
       'native',
-      withMedia(ROUTE_TOOLSETS.nativeSearch, containsImage),
-      'bounded direct repository discovery',
+      containsImage ? ROUTE_TOOLSETS.nativeMedia : ROUTE_TOOLSETS.nativeRead,
+      'direct answer or bounded information task needs no executable workflow',
     )
   }
 
-  return route(
-    containsImage ? 'native-media' : 'native-read',
-    'native',
-    containsImage ? ROUTE_TOOLSETS.nativeMedia : ROUTE_TOOLSETS.nativeRead,
-    'small direct read',
+  return codeRoute(
+    usesWeb,
+    containsImage,
+    'ambiguous task retains executable capability instead of guessing a domain',
   )
 }
 
@@ -333,9 +378,13 @@ export function selectRouteForContext(message, context = {}) {
 
   const containsImage = message.content.some((block) => block?.type === 'image')
   const continues = CONTINUATION_INTENT.test(intent)
-  const standaloneInformation = STANDALONE_INFORMATION_INTENT.test(intent)
-  const remediates = REMEDIATION_INTENT.test(intent) && !standaloneInformation
-  if (!continues && !remediates && !containsImage && standaloneInformation) return selected
+  const explicitInformationOnly =
+    EXPLANATION_ONLY_INTENT.test(intent) ||
+    (LOCAL_READ_ONLY_INTENT.test(intent) &&
+      (absoluteFilePaths(text).length > 0 || LOCAL_ARTIFACT_CONTEXT.test(intent)))
+  if (explicitInformationOnly) return selected
+  const remediates = REMEDIATION_INTENT.test(intent)
+  if (!continues && !remediates && !containsImage) return selected
 
   return codeRoute(
     WEB_INTENT.test(intent),

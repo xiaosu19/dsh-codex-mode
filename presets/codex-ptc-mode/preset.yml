@@ -1,3 +1,3 @@
 name: Codex PTC 模式
-description: Codex 工程策略与连续任务能力保持，有界原生搜索/读取结合任务级精简 Code Mode SDK、批量编排和提前上下文压缩。
+description: Codex 工程策略与通用能力保底，明确只读任务走精简原生工具，未知或可执行任务保留 Code Mode SDK、批量编排和提前上下文压缩。
 order: 7

@@ -1,4 +1,4 @@
-// Runtime controller v13 for Codex PTC Mode.
+// Runtime controller v14 for Codex PTC Mode.
 //
 // The controller selects a bounded native surface for small direct reads,
 // searches, and citation-bearing research, and a task-scoped Code Mode SDK only
@@ -49,6 +49,8 @@ export const PRESENTATION_GUIDANCE = Object.freeze({
     '- Give searches and loops an explicit cap or target set. Filter, deduplicate, rank, and aggregate intermediate data in the program; return compact plain JSON facts, paths, excerpts, counts, and failures rather than whole files, logs, raw result sets, or SDK result objects.',
     '- On an unambiguous empty result, argument-shape error, or transient child failure, correct only the failed child at most once. Preserve successful sibling results and never replay a successful portion of the pipeline.',
     '- Set shell `workdir` explicitly rather than embedding `cd`. Keep dependent shell state in one call, stop command chains on failure, and create, verify, and clean temporary directories in the same transaction.',
+    '- Never ask the user to switch modes or enable `exec_command`; this Code Mode surface already provides shell through the generated SDK. Use it when the authorized task requires a CLI, API, runtime, or remote-environment query.',
+    '- When the user provides a credential-file path for an authorized operation, do not expose the file through `read` or return its secret fields. Load it only inside the narrow shell/API operation, return non-secret identity and requested results, and avoid echoing credentials.',
     '- Keep authorized writes minimal and related, inspect the resulting diff, and remember side effects are not transactional. Never discard unrelated user work.',
     '- Verification must return compact evidence of what ran, what passed, and actionable diagnostics for each failure. Do not duplicate checks that cover the same risk.',
     '- Batch explicitly authorized publication into safe local preparation, one remote write, and one state verification. A write timeout has unknown outcome; inspect state once before considering a retry. Never expose secrets merely to test authentication.',
@@ -185,11 +187,17 @@ function positiveIntentText(text) {
 const READ_INTENT = /(?:读取|查看|检查|提取|报告|分析|审查|比较|解释)|\b(?:read|inspect|extract|report|analy[sz]e|review|compare|explain)\b/i
 const REPOSITORY_SEARCH_INTENT = /(?:搜索|查找|匹配|扫描)|\b(?:glob|grep|search|find|scan)\b|目录下|代码库|仓库|\brepositor(?:y|ies)\b/i
 const WEB_INTENT = /(?:联网|网页|网站|互联网|网上|在线搜索)|\b(?:web|internet|online)\s+(?:search|research)|https?:\/\//i
-const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement)\b/i
-const COMMAND_INTENT = /(?:运行|执行|构建|编译|启动|停止)|测试(?!目录|文件|文件夹|套件|名称|并(?:读取|查看|分析|报告))|\b(?:run|execute|build|compile|lint|typecheck|start|stop)\b|\btest\b(?!\s+(?:file|directory|folder|fixture|suite|name)\b)/i
+const STATE_CHANGE_INTENT = /修改|修复|编辑|写入|创建|删除|安装|部署|发布|提交|升级|迁移|重构|实现|调整|优化|新增|添加|改进|改版|重新?(?:排版|设计)|接入|落地|替换|更新|补充|\b(?:edit|write|fix|create|delete|install|deploy|publish|commit|upgrade|migrate|refactor|implement|change|update|add|remove|redesign|rework|adjust|optimi[sz]e|integrate)\b/i
+const COMMAND_INTENT = /(?:运行|执行|构建|编译|启动|停止)|测试(?!环境|数据|账号|服务器|目录|文件|文件夹|套件|名称|并(?:读取|查看|分析|报告))|\b(?:run|execute|build|compile|lint|typecheck|start|stop)\b|\btest\b(?!\s+(?:environment|env|data|account|server|file|directory|folder|fixture|suite|name)\b)/i
 const EXPLICIT_CODE_INTENT = /\b(?:run_code|code\s*mode|programmatic\s+tool\s+calling|ptc)\b|程序化工具调用|代码模式/i
 const FANOUT_INTENT = /(?:全部|所有|每个|逐个|全仓|整个仓库|递归|批量|大量)|\b(?:all|every|each|recursive(?:ly)?|repository-wide|repo-wide|batch|bulk|many)\b/i
 const REDUCTION_INTENT = /(?:统计|计数|汇总|聚合|去重|排序|排名|筛选|过滤|合并|比较|对比|提取|交叉验证)|\b(?:count|aggregate|summari[sz]e|deduplicat|sort|rank|filter|join|compare|extract|cross-check)\w*\b/i
+const EXTERNAL_EXECUTION_TARGET = /(?:AWS|Azure|GCP|阿里云|腾讯云|云账号|云资源|远程(?:主机|服务器|环境)?|服务器|实例|集群|容器|数据库|测试环境|生产环境|线上环境|域名|端口)|\b(?:aws|ec2|ssm|iam|cost\s*explorer|s3|rds|lambda|azure|gcp|remote\s+(?:host|server|environment)|server|instance|cluster|database|staging|production)\b/i
+const EXTERNAL_EXECUTION_ACTION = /(?:查询|获取|拉取|调用|连接|请求|同步|上传|下载|列出|枚举|看看|查看|检查|验证|部署|发布|切换|重启|启动|停止|执行|运行)|\b(?:query|fetch|get|call|connect|request|sync|upload|download|list|inspect|check|verify|deploy|publish|switch|restart|start|stop|run|execute)\b/i
+const CREDENTIAL_OR_REMOTE_CLI = /(?:AK\s*\/?\s*SK|访问密钥|凭据文件)|\b(?:access\s*key|secret\s*key|credentials?|aws\s+cli|boto3|kubectl|terraform|ansible|ssh|scp)\b/i
+const REMEDIATION_INTENT = /(?:报错|错误|失败|异常|有问题|不正常|不工作|没(?:有)?生效|无效|卡住|无法|不能)|\b(?:error|exception|validationexception|traceback|fail(?:ed|ure)?|broken|not\s+working)\b/i
+const CONTINUATION_INTENT = /^(?:那?就?)?(?:继续|接着|开始(?:吧)?|执行(?:吧)?|照(?:你|上面|这个)?.*做|按(?:你|上面|这个)?.*做|就这么做|可以|好的?|没问题|ok|go\s+ahead|proceed|do\s+it)[。.!！\s]*$/i
+const STANDALONE_INFORMATION_INTENT = /(?:只|仅).*(?:读取|查看|检查|提取|报告|分析|审查|比较|解释|搜索|查找)|(?:解释|说明|总结|报告|分析|审查|比较)(?:一下|下)?|\b(?:only\s+(?:read|inspect|explain|search)|explain|summari[sz]e|report|review|compare)\b/i
 
 function route(id, mode, allow, reason) {
   return Object.freeze({
@@ -205,6 +213,16 @@ function withMedia(toolSet, containsImage) {
   return containsImage ? frozenToolSet(...toolSet, 'read_image') : toolSet
 }
 
+function codeRoute(usesWeb, containsImage, reason) {
+  const tools = usesWeb ? ROUTE_TOOLSETS.codeResearch : ROUTE_TOOLSETS.codeCore
+  return route(
+    usesWeb ? 'code-research' : 'code-core',
+    'code',
+    withMedia(tools, containsImage),
+    reason,
+  )
+}
+
 /**
  * Select the smallest useful model-visible surface for a newly inserted human
  * message. The decision is based on reusable task-shape features rather than
@@ -218,20 +236,36 @@ export function selectRouteForMessage(message) {
   const containsImage = message.content.some((block) => block?.type === 'image')
   const intent = positiveIntentText(text)
   const usesWeb = WEB_INTENT.test(intent)
-  const changesState = STATE_CHANGE_INTENT.test(intent)
-  const runsCommands = COMMAND_INTENT.test(intent)
-  const requestsCode = EXPLICIT_CODE_INTENT.test(intent)
-  const predictsReduction = FANOUT_INTENT.test(intent) && REDUCTION_INTENT.test(intent)
+  const standaloneInformation = STANDALONE_INFORMATION_INTENT.test(intent)
+  const changesState = STATE_CHANGE_INTENT.test(intent) && !standaloneInformation
+  const runsCommands = COMMAND_INTENT.test(intent) && !standaloneInformation
+  const requestsCode = EXPLICIT_CODE_INTENT.test(intent) && !standaloneInformation
+  const predictsReduction =
+    FANOUT_INTENT.test(intent) && REDUCTION_INTENT.test(intent) && !standaloneInformation
+  const needsExternalExecution =
+    !standaloneInformation &&
+    (CREDENTIAL_OR_REMOTE_CLI.test(intent) ||
+      (EXTERNAL_EXECUTION_TARGET.test(intent) && EXTERNAL_EXECUTION_ACTION.test(intent)))
+  const needsRemediation = REMEDIATION_INTENT.test(intent) && !standaloneInformation
 
-  if (changesState || runsCommands || requestsCode || predictsReduction) {
-    const tools = usesWeb ? ROUTE_TOOLSETS.codeResearch : ROUTE_TOOLSETS.codeCore
-    return route(
-      usesWeb ? 'code-research' : 'code-core',
-      'code',
-      withMedia(tools, containsImage),
+  if (
+    changesState ||
+    runsCommands ||
+    requestsCode ||
+    predictsReduction ||
+    needsExternalExecution ||
+    needsRemediation
+  ) {
+    return codeRoute(
+      usesWeb,
+      containsImage,
       changesState || runsCommands
         ? 'authorized deterministic work pipeline'
-        : 'fan-out with intermediate-result reduction',
+        : needsExternalExecution
+          ? 'external CLI, API, or runtime query requires executable capability'
+          : needsRemediation
+            ? 'reported failure requires executable diagnosis or remediation'
+            : 'fan-out with intermediate-result reduction',
     )
   }
 
@@ -262,6 +296,53 @@ export function selectRouteForMessage(message) {
     'native',
     containsImage ? ROUTE_TOOLSETS.nativeMedia : ROUTE_TOOLSETS.nativeRead,
     'small direct read',
+  )
+}
+
+function previousCodeWork(state) {
+  if (!isRecord(state)) return false
+  return (
+    state.mutationCalls > 0 ||
+    state.verificationCalls > 0 ||
+    state.transportErrors > 0 ||
+    state.phase === 'implement' ||
+    state.phase === 'recover' ||
+    state.phase === 'verify'
+  )
+}
+
+/**
+ * Preserve executable capability across terse follow-ups to an active Code
+ * workflow. A clear standalone read/explanation may still step back down to a
+ * native surface; "continue", an error report, or an image-only follow-up may
+ * not strand an unfinished implementation or deployment without shell access.
+ */
+export function selectRouteForContext(message, context = {}) {
+  const selected = selectRouteForMessage(message)
+  if (selected === undefined || selected.mode === 'code') return selected
+
+  const text = userText(message)
+  if (text === undefined) return selected
+  const intent = positiveIntentText(text)
+  const previousRoute = isRecord(context.previousRoute) ? context.previousRoute : undefined
+  const previousTurnState = isRecord(context.previousTurnState)
+    ? context.previousTurnState
+    : undefined
+  const followsCode = previousRoute?.mode === 'code' || previousCodeWork(previousTurnState)
+  if (!followsCode) return selected
+
+  const containsImage = message.content.some((block) => block?.type === 'image')
+  const continues = CONTINUATION_INTENT.test(intent)
+  const standaloneInformation = STANDALONE_INFORMATION_INTENT.test(intent)
+  const remediates = REMEDIATION_INTENT.test(intent) && !standaloneInformation
+  if (!continues && !remediates && !containsImage && standaloneInformation) return selected
+
+  return codeRoute(
+    WEB_INTENT.test(intent),
+    containsImage,
+    continues || remediates
+      ? 'continue active executable workflow'
+      : 'preserve capability for unfinished implementation or verification',
   )
 }
 
@@ -854,9 +935,12 @@ export function apply(ctx, inputConfig = {}) {
     // prompt section. Preset generations are shared by multiple sessions, so a
     // generation-level route variable would leak one session's choice into another.
     scope.on('agent/inbox/inserted', ({ agent, message }) => {
-      const selected = selectRouteForMessage(message)
-      if (selected === undefined) return
       const current = presentationStates.get(agent)
+      const selected = selectRouteForContext(message, {
+        previousRoute: current,
+        previousTurnState: states.get(agent),
+      })
+      if (selected === undefined) return
       if (current?.signature === selected.signature) return
       current?.dispose()
 
@@ -936,6 +1020,7 @@ export function apply(ctx, inputConfig = {}) {
       return states.get(agent)
     },
     routeForMessage: selectRouteForMessage,
+    routeForContext: selectRouteForContext,
     presentationForMessage: selectPresentationForMessage,
     config,
   }

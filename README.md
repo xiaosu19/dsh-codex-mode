@@ -6,7 +6,7 @@
 
 - **完整的工程闭环**：围绕理解目标、收集证据、最小修改和验证结果组织执行，不把“写完代码”误当成“任务完成”。
 - **减少无效工具调用**：使用结构化 `workdir`、定向搜索、证据账本和一次性收敛建议，降低重复 `cd`、重复读取、根目录扫描和超长工具链。
-- **按任务选择工具面**：既保留直接、稳定的原生工具模式，也提供能把批量过滤、命令、修改与验证编排进一次程序的 PTC 模式；小型搜索不会仅因存在多个或依赖调用就被迫生成程序。
+- **按任务选择工具面**：既保留直接、稳定的原生工具模式，也提供能把批量过滤、命令、修改与验证编排进一次程序的 PTC 模式；小型搜索不会仅因存在多个或依赖调用就被迫生成程序，AWS/API/远程环境任务也不会误降成只读模式。
 - **控制长任务 token 成本**：按模型真实上下文容量提前压缩、裁剪工具结果；Codex PTC 还会按任务限制原生 schema 或生成 SDK 的工具集合，只在程序编排或中间结果压缩有收益时使用 `run_code`。
 - **非阻断式控制**：运行时控制器只依据真实工具结果给出一次性建议，不拒绝工具调用，也不会把正常收敛提醒制造成红色错误。
 - **模型与 provider 中立**：模型、endpoint、推理档位和上下文容量始终由 DSH 会话与 provider 管理，可用于 GPT、Claude、DeepSeek 等不同路由；Codex Harness 模式也不要求 Codex 登录。
@@ -31,6 +31,8 @@ Codex 模式以质量和稳定性为优先。persona 定义授权边界与工程
 Codex PTC 保留 Codex 模式的授权、最小相关面、最小修改和验证闭环，同时加入自适应工具面选择器。有界读取使用原生 `read`；小型仓库检索使用受限的原生 `glob` / `grep` / `read`；带引用的 Web 调研保持直接工具调用。修改、Shell/测试链，以及需要对大量中间结果进行统计、过滤、去重、排序或聚合的任务，才使用 Code Mode 和 `run_code`。
 
 进入 Code Mode 后也不会默认生成全量 SDK：控制器通过 DSH 的 scope restriction 只保留当前任务需要的文件、搜索、Shell、Job、Skill，以及必要时的 Web 工具。选择依据是任务形态，而不是模型名称、仓库路径或测试答案，因此优化能够推广到真实工程任务。
+
+路由器还会保留连续任务的必要能力。上一回合正在修改、验证、修复或部署时，下一句“继续”“开始吧”、错误日志或图片跟进会继续使用 Code Mode；只有明确提出独立的“只读取/只解释、不修改”请求才降回原生工具面。涉及 AWS、云资源、远程服务器、测试/生产环境、数据库、CLI/API 或凭据驱动的实际查询时会直接进入 Code Mode，模型不应要求用户另外切换模式或启用 `exec_command`。
 
 ### Codex Harness 模式
 
@@ -62,6 +64,10 @@ Codex Harness 模式面向“在 DSH 中使用 Codex Agent 工作方式，但继
 
 这也是 VPN/代理环境下的单次方向性样本，不能当作稳定 P50/P95。完整前后数据、固定上下文差异、原因和限制见 [Codex PTC v13 通用路由优化实测](docs/benchmark-v13-2026-08-24.md)，机器可读数据见 [`benchmarks/2026-08-24-v13-sol-low-vpn.json`](benchmarks/2026-08-24-v13-sol-low-vpn.json)。
 
+## v14 连续任务与外部能力回归
+
+2026-08-25 从两条真实 DSH 会话日志确认，v13 会把 AWS 账号查询、错误修复以及“继续部署”等跟进错误切成 `read` 或 `glob` / `grep` / `read`，导致模型反复要求用户切换 Code Mode。v14 增加外部执行意图与连续工作流状态，修复后 29/29 项确定性测试通过；使用 `gpt-5.6-sol Low` 的无副作用新会话检查中，虚构 AWS/AKSK 查询、随后“继续”和测试环境 SP 数据获取三种输入都保持 `run_code`，且没有发出工具调用或使用真实凭据。完整脱敏证据见 [Codex PTC v14 能力连续性回归报告](docs/regression-v14-2026-08-25.md)。
+
 ## 这是什么
 
 DSH 的一个 agent preset 就是一个目录。本仓库的三个 preset 都包含组合与界面元数据；两个 DSH 原生模式另带独立控制器，Harness 模式把 Codex 工具运行层交给固定版本的兼容插件：
@@ -71,7 +77,7 @@ DSH 的一个 agent preset 就是一个目录。本仓库的三个 preset 都包
 | `agent.cordis.yml` | 组合定义：persona 提示词 + 挂载哪些工具行（必需） |
 | `preset.yml` | 界面上显示的名字、描述、排序（可选） |
 | `presets/codex-mode/controller/runtime-v6.mjs` | Codex 模式的阶段/证据控制器 |
-| `presets/codex-ptc-mode/controller/runtime-v13.mjs` | Codex PTC 的阶段/证据控制器、收益路由和任务级工具面裁剪 |
+| `presets/codex-ptc-mode/controller/runtime-v14.mjs` | Codex PTC 的阶段/证据控制器、收益路由、连续任务能力保持和任务级工具面裁剪 |
 | `presets/codex-harness-mode/agent.cordis.yml` | Codex 工具契约到 DSH provider、Shell、文件、压缩和 Skills 的组合边界 |
 
 目录名就是预设 id。DSH 启动时扫描 `$DSH_HOME/.agent-presets/`（默认 `~/.dsh/.agent-presets/`），发现的预设会出现在会话的模式选择器里。
@@ -114,7 +120,7 @@ Windows PowerShell：
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -Preset codex-ptc-mode
 ```
 
-它会安装到 `$DSH_HOME/.agent-presets/codex-ptc-mode/`（默认 `~/.dsh/.agent-presets/codex-ptc-mode/`），显示为「Codex PTC 模式」。该模式保留 Codex 模式的授权、最小相关面、最小修改、验证闭环、软步骤预算、证据账本、非阻断检查点和提前压缩。运行时会在每个用户回合开始前选择紧凑工具面：少量读取只暴露 `read`；小型仓库检索暴露 `glob` / `grep` / `read`；带引用的联网调研使用直接 Web 工具。只有修改、命令/测试链或能显著过滤、聚合大量中间结果的任务才生成 `run_code` 程序，而且 SDK 会限制到任务所需能力。它不使用固定 `both`，因此不会让每一步同时承担原生工具 schema 和 SDK 的双份上下文。首版不加入 goal、subagent、workflow 或 Ralph。覆盖更新使用 `--force` / `-Force`，安装器会先保留时间戳备份。
+它会安装到 `$DSH_HOME/.agent-presets/codex-ptc-mode/`（默认 `~/.dsh/.agent-presets/codex-ptc-mode/`），显示为「Codex PTC 模式」。该模式保留 Codex 模式的授权、最小相关面、最小修改、验证闭环、软步骤预算、证据账本、非阻断检查点和提前压缩。运行时会在每个用户回合开始前选择紧凑工具面：少量读取只暴露 `read`；小型仓库检索暴露 `glob` / `grep` / `read`；带引用的联网调研使用直接 Web 工具。修改、命令/测试链、大范围聚合，以及 AWS/API/远程环境等需要终端的实际操作会使用 `run_code`，SDK 限制到任务所需能力；连续实施中的简短跟进不会卸载该能力。它不使用固定 `both`，因此不会让每一步同时承担原生工具 schema 和 SDK 的双份上下文。首版不加入 goal、subagent、workflow 或 Ralph。覆盖更新使用 `--force` / `-Force`，安装器会先保留时间戳备份。
 
 工具编排规则也按当前工具面动态注入：原生回合只携带简短的有界直接调用契约；Code Mode 回合携带 SDK、失败恢复和验证规则，但 SDK 本身仍按任务裁剪。多个调用或调用之间存在依赖，并不会单独触发 PTC；选择器寻找的是确定性修改/验证流水线，或中间结果相对最终答案明显更大的过滤与聚合工作。
 
@@ -231,7 +237,7 @@ models:
 npm test
 ```
 
-测试覆盖任务收益路由、同 presentation 下的工具面切换、SDK allowlist、工具分类、阶段迁移、一次性检查点、根扫描建议、shell 搜索渐进纠偏、`cd`/`workdir` 分流，以及运行时不存在 `tools/pre-execute` 拒绝器。发布包还应执行 `scripts/pack.sh`，从 zip 与 tar.gz 各自解压安装，并由 DSH `agentPreset.list` 和新会话实际 mount 验证。
+测试覆盖任务收益路由、外部执行意图、连续任务能力保持、同 presentation 下的工具面切换、SDK allowlist、工具分类、阶段迁移、一次性检查点、根扫描建议、shell 搜索渐进纠偏、`cd`/`workdir` 分流，以及运行时不存在 `tools/pre-execute` 拒绝器。发布包还应执行 `scripts/pack.sh`，从 zip 与 tar.gz 各自解压安装，并由 DSH `agentPreset.list` 和新会话实际 mount 验证。
 
 开发时用同一个失败测试 fixture 分别跑过 Claude、GPT 和 DeepSeek 路由：三者都完成了一行最小修改并通过 2/2 测试。真实长任务也暴露过旧硬保护的反例：“给共享记忆插件增加 GUI 面板”在 24 步内收到 7 次控制器上下文和 9 次控制器制造的工具错误，其中 decision 在第 8、12、16、20 步重复注入。v6 因此移除了 discovery lease 和所有 pre-execute denial；这个失败轨迹已固化为“一次注入、零拒绝”的运行时回归条件。
 

@@ -26,14 +26,15 @@ import {
   renderCheckpoint,
   resolveConfig,
   selectPresentationForMessage,
+  selectRouteForContext,
   selectRouteForMessage,
   selectCheckpoint,
-} from '../presets/codex-ptc-mode/controller/runtime-v13.mjs'
+} from '../presets/codex-ptc-mode/controller/runtime-v14.mjs'
 
 const repository = fileURLToPath(new URL('..', import.meta.url))
 const presetRoot = join(repository, 'presets', 'codex-ptc-mode')
 const compositionPath = join(presetRoot, 'agent.cordis.yml')
-const controllerPath = join(presetRoot, 'controller', 'runtime-v13.mjs')
+const controllerPath = join(presetRoot, 'controller', 'runtime-v14.mjs')
 
 const ok = (text = 'ok') => ({
   isError: false,
@@ -133,10 +134,10 @@ test('hybrid preset metadata, adaptive presentation, and compact surface are exa
   assert.match(metadata, /^name: Codex PTC 模式$/m)
   assert.match(
     metadata,
-    /^description: Codex 工程策略与非阻断收敛控制，有界原生搜索\/读取结合任务级精简 Code Mode SDK、批量编排和提前上下文压缩。$/m,
+    /^description: Codex 工程策略与连续任务能力保持，有界原生搜索\/读取结合任务级精简 Code Mode SDK、批量编排和提前上下文压缩。$/m,
   )
   assert.match(metadata, /^order: 7$/m)
-  assert.match(composition, /name: '\.\/controller\/runtime-v13\.mjs'/)
+  assert.match(composition, /name: '\.\/controller\/runtime-v14\.mjs'/)
   assert.doesNotMatch(composition, /@deepseek-ai\/dsh-agent-tool-presentation/)
 
   for (const [key, value] of [
@@ -212,11 +213,17 @@ test('adaptive orchestration favors direct bounded work and reduced code pipelin
     'return compact plain JSON facts',
     'correct only the failed child at most once',
     'Set shell `workdir` explicitly',
+    'Never ask the user to switch modes',
+    'do not expose the file through `read`',
     'Keep authorized writes minimal and related',
     'A write timeout has unknown outcome',
   ]) {
     assert.match(PRESENTATION_GUIDANCE.code, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   }
+  assert.match(
+    composition,
+    /An explicit deploy or publish request authorizes that named external write/,
+  )
 })
 
 test('route selector keeps small direct work native and chooses code for real reduction', () => {
@@ -287,6 +294,43 @@ test('route selector keeps small direct work native and chooses code for real re
     selectRouteForMessage(humanMessage('在线搜索官方 API 文档并给出引用。'))?.id,
     'native-research',
   )
+  assert.equal(
+    selectRouteForMessage(
+      humanMessage(
+        '/Users/example/account_accessKeys.csv 通过这个账号的 AKSK 看看 Ohio 区域服务器是什么型号。',
+      ),
+    )?.id,
+    'code-core',
+  )
+  assert.equal(
+    selectRouteForMessage(humanMessage('现在测试环境的 SP 数据是怎么获取的？'))?.id,
+    'code-core',
+  )
+  assert.equal(
+    selectRouteForMessage(humanMessage('搜索仓库里的测试环境配置文件并解释其数据源。'))?.id,
+    'native-search',
+  )
+  assert.equal(
+    selectRouteForMessage(
+      humanMessage(
+        'An error occurred (ValidationException): Unsupported Dimension Key=LINKED_ACCOUNT',
+      ),
+    )?.id,
+    'code-core',
+  )
+  assert.equal(
+    selectRouteForMessage(
+      humanMessage('这个太空了，重新排版并添加账号搜索。', [
+        { type: 'text', text: '这个太空了，重新排版并添加账号搜索。' },
+        { type: 'image', data: 'placeholder' },
+      ]),
+    )?.mode,
+    'code',
+  )
+  assert.equal(
+    selectRouteForMessage(humanMessage('解释 AWS Cost Explorer 的覆盖率计算口径。'))?.mode,
+    'native',
+  )
   assert.deepEqual(
     selectRouteForMessage(humanMessage('修复项目并运行测试。'))?.allow,
     ROUTE_TOOLSETS.codeCore,
@@ -299,6 +343,42 @@ test('route selector keeps small direct work native and chooses code for real re
     }),
     undefined,
   )
+})
+
+test('context route keeps executable capability for terse workflow follow-ups', () => {
+  const previousRoute = selectRouteForMessage(humanMessage('修改功能、运行测试并部署到测试环境。'))
+  const previousTurnState = createTurnState(4)
+  previousTurnState.phase = 'verify'
+  previousTurnState.mutationCalls = 2
+  previousTurnState.verificationCalls = 1
+
+  for (const text of ['继续', '开始吧', '就按照你说的做']) {
+    const selected = selectRouteForContext(humanMessage(text), {
+      previousRoute,
+      previousTurnState,
+    })
+    assert.equal(selected?.mode, 'code', text)
+    assert.deepEqual(selected?.allow, ROUTE_TOOLSETS.codeCore, text)
+  }
+
+  const imageFollowUp = selectRouteForContext(
+    humanMessage('', [{ type: 'image', data: 'placeholder' }]),
+    { previousRoute, previousTurnState },
+  )
+  assert.equal(imageFollowUp?.mode, 'code')
+  assert.equal(imageFollowUp?.allow.includes('read_image'), true)
+
+  const explanation = selectRouteForContext(humanMessage('只解释刚才错误的原因，不要修改。'), {
+    previousRoute,
+    previousTurnState,
+  })
+  assert.equal(explanation?.mode, 'native')
+
+  const boundedRead = selectRouteForContext(
+    humanMessage('只读取 /Users/example/repo/package.json 并报告 name。'),
+    { previousRoute, previousTurnState },
+  )
+  assert.equal(boundedRead?.mode, 'native')
 })
 
 test('runtime isolates presentation, restriction, and guidance per agent', () => {
@@ -389,6 +469,64 @@ test('runtime isolates presentation, restriction, and guidance per agent', () =>
   ])
 })
 
+test('runtime keeps Code Mode mounted across an active workflow continuation', async () => {
+  const { listeners, presentationEvents, restrictionEvents } = makeRuntimeHarness()
+  const agent = {
+    ctx: {
+      tools: {
+        presentAs(mode) {
+          presentationEvents.push({ kind: 'set', mode })
+          return () => presentationEvents.push({ kind: 'dispose', mode })
+        },
+        restrict(filter) {
+          restrictionEvents.push({ kind: 'set', filter })
+          return () => restrictionEvents.push({ kind: 'dispose', filter })
+        },
+      },
+      systemPrompt: {
+        section() {
+          return () => {}
+        },
+      },
+    },
+  }
+
+  emitEvent(listeners, 'agent/inbox/inserted', {
+    agent,
+    message: humanMessage('修改功能、运行测试并部署到测试环境。'),
+  })
+  await dispatchWaterfall(
+    listeners,
+    'agent/pre-step',
+    [{ agent, turn: 1, step: 1, signal: new AbortController().signal }],
+    { kind: 'enter', messages: [] },
+  )
+  emitEvent(
+    listeners,
+    'tools/result',
+    { agent, name: 'edit', arguments: { file_path: '/repo/app.ts' }, parent: Symbol('run') },
+    ok('updated'),
+  )
+
+  emitEvent(listeners, 'agent/inbox/inserted', {
+    agent,
+    message: humanMessage('继续'),
+  })
+  assert.deepEqual(presentationEvents, [{ kind: 'set', mode: 'code' }])
+  assert.deepEqual(restrictionEvents, [
+    { kind: 'set', filter: { allow: ROUTE_TOOLSETS.codeCore } },
+  ])
+
+  emitEvent(listeners, 'agent/inbox/inserted', {
+    agent,
+    message: humanMessage('只解释刚才修改的作用，不要继续修改。'),
+  })
+  assert.deepEqual(presentationEvents.slice(-2), [
+    { kind: 'dispose', mode: 'code' },
+    { kind: 'set', mode: 'native' },
+  ])
+})
+
 test('runtime refreshes a same-presentation route when its capability set changes', () => {
   const { listeners, presentationEvents, restrictionEvents } = makeRuntimeHarness()
   const agent = {
@@ -453,7 +591,7 @@ test('classifies real Code Mode sub-tools by discovery, mutation, and verificati
     'mutation-verification',
   )
   assert.equal(
-    classifyCall('bash', { command: 'node --check controller/runtime-v13.mjs', workdir: '/repo' }),
+    classifyCall('bash', { command: 'node --check controller/runtime-v14.mjs', workdir: '/repo' }),
     'verification',
   )
   assert.equal(classifyCall('bash', { command: 'git status --short', workdir: '/repo' }), 'discovery')
